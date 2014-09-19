@@ -1,0 +1,29 @@
+{
+  "name": "codecap",
+  "version": "0.0.0",
+  "description": "Code Capture",
+  "main": "codecap.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Matthew Huebert",
+  "license": "MIT",
+  "devDependencies": {
+    "webpack": "^1.4.0-beta10",
+    "cjsx-loader": "^0.2.0",
+    "react-hot-loader": "^0.4.3",
+    "coffee-script": "^1.8.0",
+    "coffee-loader": "^0.7.2",
+    "react": "^0.11.2",
+    "codemirror": "^4.5.0",
+    "webpack-dev-server": "^1.6.5"
+  },
+  "dependencies": {
+    "style-loader": "^0.8.0",
+    "css-loader": "^0.8.0",
+    "underscore": "^1.7.0",
+    "immutable": "^2.0.17",
+    "react-draggable": "^0.2.1"
+  }
+}
