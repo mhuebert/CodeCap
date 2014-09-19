@@ -36,10 +36,11 @@ module.exports = React.createClass
     ]
     @setState history: history
   handleChanges: (cm, changes) ->
-    history =  @state.history.concat changes.map (change) -> 
-      change.time = Date.now()
-      change.type = "text"
-      change
+    history =  @state.history.concat [
+      type: "text"
+      time: Date.now()
+      changes: changes 
+    ]
     @setState history: history
 
   handleCursorActivity: (cm) ->
@@ -53,11 +54,13 @@ module.exports = React.createClass
   applyChange: (change) ->
     switch change.type
       when "text"
-        @editor2.replaceRange change.text.join("\n"), change.from, change.to
+        for change in change.changes
+          @editor2.replaceRange change.text.join("\n"), change.from, change.to
       when "key-combo"
         @setState shortcutHistory: @state.shortcutHistory.concat [change.name]
       when "selections"
         @editor2.setSelections change.selections
+  
   play: ->
     startLocation = @state.playbackLocation+1
     for change, index in @state.history.toJS().slice(startLocation)
@@ -65,11 +68,9 @@ module.exports = React.createClass
         setTimeout =>
           @setState playbackLocation: index+startLocation
           @applyChange(change)
-        , (index * 500)
+        , (index * 20)
     false
 
-  # backwards: ->
-  #   for change, in
   playbackLocationIndicatorPosition: ->
     (@state.playbackLocation / (@state.history.length-1)) * 400
 
@@ -79,19 +80,11 @@ module.exports = React.createClass
       @applyChange(change)
     @setState playbackLocation: index
   
-  handleDrag: (event, ui) ->
-    left = ui.position.left
-    indicator = this.refs.playbackIndicator.getDOMNode()
-    if left < 0
-      indicator.style.left = 0
-    if left > 410
-      indicator.style.left = 410
-    if 0 < left < 411
-      @goTo (left/410) * @state.history.length
   handleMouseMove: (e) ->
-    node = this.refs.playbackLine.getDOMNode()
-    offset = parseInt(e.clientX - node.getBoundingClientRect().left)
+    indicator = this.refs.playbackLine.getDOMNode()
+    offset = parseInt(e.clientX - indicator.getBoundingClientRect().left)
     @goTo (offset/410) * @state.history.length
+
   render: ->
     @transferPropsTo <div>
         
@@ -106,6 +99,7 @@ module.exports = React.createClass
             
           </ul>
           <textarea className="editor-2" ref="editor2" />
-          <ul id="shortcut-history">{@state.shortcutHistory.toJS().reverse().slice(0,5).map((shortcut)-><li>{shortcut}</li>)}</ul>
+          <ul id="shortcut-history">
+            {@state.shortcutHistory.toJS().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}</ul>
         </div>
       </div>

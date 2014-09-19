@@ -1,3 +1,4 @@
+require("codemirror/lib/codemirror.css")
 require("../style.css")
 
 React = require("react")
