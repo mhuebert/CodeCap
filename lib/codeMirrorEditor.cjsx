@@ -72,7 +72,7 @@ module.exports = React.createClass
     false
 
   playbackLocationIndicatorPosition: ->
-    (@state.playbackLocation / (@state.history.length-1)) * 400
+    @state.playbackLocation / (@state.history.length) * 100
 
   goTo: (index) ->
     @editor2.setValue ""
@@ -81,23 +81,24 @@ module.exports = React.createClass
     @setState playbackLocation: index
   
   handleMouseMove: (e) ->
-    indicator = this.refs.playbackLine.getDOMNode()
-    offset = parseInt(e.clientX - indicator.getBoundingClientRect().left)
-    @goTo (offset/410) * @state.history.length
+    playbackLine = this.refs.playbackLine.getDOMNode()
+    rect = playbackLine.getBoundingClientRect()
+    offset = (e.clientX - rect.left)
+    @goTo (offset/rect.width) * @state.history.length
 
   render: ->
     @transferPropsTo <div>
         
         <textarea className="editor-1" ref="editor" />
         <div id="codecap-preview">
-          <ul className="codecap-controls">
-            <li onClick={@play}><a href="#">Play</a></li>
-            
-            <li  onMouseMove={@handleMouseMove} ref="playbackLine" className="playback-line">
-              <span style={{left: @playbackLocationIndicatorPosition()+"px"}} className="playback-location" />
-            </li>
-            
-          </ul>
+          <div className="controls">
+            <div onClick={@play}><a className="controls-play" href="#"></a></div>
+            <div  onMouseMove={@handleMouseMove} ref="playbackLine" className="playback-line">
+              <span style={{left: @playbackLocationIndicatorPosition()+"%"}} className="playback-location" />
+            </div>
+          </div>
+
+          
           <textarea className="editor-2" ref="editor2" />
           <ul id="shortcut-history">
             {@state.shortcutHistory.toJS().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}</ul>

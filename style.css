@@ -5,15 +5,14 @@ body {
 }
 .CodeMirror {
   text-align: left;
-  margin: 0 20px;
 }
 #shortcut-history {
   text-align:left;
   position: absolute;
   padding: 0;
   margin: 0;
-  top: 35px;
-  left: 540px;
+  top: 40px;
+  left: 560px;
   float: left;
   vertical-align: top;
   font-size: 16px;
@@ -30,33 +29,50 @@ body {
   position:relative;
 }
 .playback-line {
-  height: 20px;
   background: #ddd;
+  height: 100%;
   position: relative;
-  width: 400px;
-  margin-left: 10px;
+  margin-left:29px;
 }
 .playback-location {
-  height: 20px;
-  width: 10px;
+  height: 100%;
+  width: 4px;
   position: absolute;
-  background: red;
-  /*margin-top: -8px;*/
+  background: #aaa;
 }
-.codecap-controls {
-  height: 20px;
+.controls {
+  height: 30px;
   text-align: left;
 }
-.codecap-controls li {
-  display: inline-block;
-  padding: 0 10px 0 0;
-}
-.codecap-controls a {
+
+.controls a {
   cursor: pointer;
   text-decoration:none;
   display:inline-block;
   color:black;
 }
-.codecap-controls a:hover {
-  text-decoration:underline;
+.controls a:hover {
+  background: #008ac4;
+}
+.controls-play {
+  float: left;
+  height: 100%;
+  width: 29px;
+  background:#00aaf1;  
+  display: inline-block;
+  position: relative;
+}
+.controls-play::after {
+  display: inline-block;
+  width: 0; 
+  height: 0; 
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 12px solid white;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: -5px;
+  margin-top: -7px;
+  content: " ";
 }
