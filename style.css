@@ -39,6 +39,7 @@ body {
   width: 4px;
   position: absolute;
   background: #aaa;
+  margin-left:-1px;
 }
 .controls {
   height: 30px;
@@ -75,4 +76,17 @@ body {
   margin-left: -5px;
   margin-top: -7px;
   content: " ";
+}
+.playing .controls-play::after {
+  display: inline-block;
+  width: 10px; 
+  height: 10px;
+  background: white; 
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: -5px;
+  margin-top: -5px;
+  content: " ";
+  border: none;
 }

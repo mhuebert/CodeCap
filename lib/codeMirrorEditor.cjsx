@@ -8,12 +8,13 @@ Draggable = require('react-draggable')
 
 editorSettings = 
   mode: "clojure"
-  lineNumbers: true
+  lineNumbers: false
   lineWrapping: true
   smartIndent: true
   matchBrackets: true
   theme: 'solarized-light'
   keyMap: 'sublime'
+  # editor.setOption("readOnly", true)
 
 module.exports = React.createClass
   getInitialState: ->
@@ -23,7 +24,7 @@ module.exports = React.createClass
 
   componentDidMount: ->
     window.cm = @editor = CodeMirror.fromTextArea @refs.editor.getDOMNode(), editorSettings
-    @editor2 = CodeMirror.fromTextArea @refs.editor2.getDOMNode(), editorSettings
+    window.e2 = @editor2 = CodeMirror.fromTextArea @refs.editor2.getDOMNode(), _(editorSettings).chain().clone().extend({readOnly: true}).value()
 
     @editor.on 'changes', @handleChanges
     @editor.on 'cursorActivity', @handleCursorActivity
@@ -43,12 +44,20 @@ module.exports = React.createClass
     ]
     @setState history: history
 
+  
   handleCursorActivity: (cm) ->
-    history = @state.history.concat [
-      type: "selections"
-      selections: cm.listSelections()
-      time: Date.now()
-    ]
+    selections = cm.listSelections()
+    if selections.length == 1 and selections[0].anchor.ch == selections[0].head.ch
+      change =
+        type: "cursor"
+        cursor: selections[0].head
+        time: Date.now()
+    else
+      change = 
+        type: "selections"
+        selections: selections
+        time: Date.now()
+    history = @state.history.concat [change]
     @setState history: history
 
   applyChange: (change) ->
@@ -58,21 +67,47 @@ module.exports = React.createClass
           @editor2.replaceRange change.text.join("\n"), change.from, change.to
       when "key-combo"
         @setState shortcutHistory: @state.shortcutHistory.concat [change.name]
+      when "cursor"
+        @editor2.focus()
+        @editor2.setCursor change.cursor
       when "selections"
         @editor2.setSelections change.selections
   
   play: ->
-    startLocation = @state.playbackLocation+1
-    for change, index in @state.history.toJS().slice(startLocation)
-      do (change, index) =>
-        setTimeout =>
-          @setState playbackLocation: index+startLocation
-          @applyChange(change)
-        , (index * 20)
+    if @state.playing or @state.history.length == 0
+      @setState {playing: false}
+      return
+    
+    if @state.playbackLocation == @state.history.length-1 
+      startLocation = 0
+      @goTo 0
+    else 
+      startLocation = @state.playbackLocation+1
+
+    playFrom = (frameIndex) =>
+      if frameIndex == @state.history.length or !@state.playing
+        @setState {playing: false}
+        return
+      change = @state.history.get(frameIndex)
+      @applyChange change
+      timeOut = switch change.type
+        when "key-combo" then 0
+        else 30
+      @setState {playbackLocation: frameIndex}, ->
+        setTimeout ->
+          playFrom(frameIndex+1)
+        , timeOut
+    @setState {playing: true}, ->
+      playFrom(Math.round startLocation)
     false
 
   playbackLocationIndicatorPosition: ->
-    @state.playbackLocation / (@state.history.length) * 100
+    width = this.refs.playbackLine?.getDOMNode().getBoundingClientRect().width
+    offset = switch
+      when Math.ceil(@state.playbackLocation) == @state.history.length-1
+        width - 3
+      else
+        (@state.playbackLocation / (@state.history.length) * width)
 
   goTo: (index) ->
     @editor2.setValue ""
@@ -84,23 +119,28 @@ module.exports = React.createClass
     playbackLine = this.refs.playbackLine.getDOMNode()
     rect = playbackLine.getBoundingClientRect()
     offset = (e.clientX - rect.left)
-    @goTo (offset/rect.width) * @state.history.length
+    if 0 <= offset <= rect.width
+      @goTo (offset/rect.width) * @state.history.length
 
   render: ->
     @transferPropsTo <div>
         
         <textarea className="editor-1" ref="editor" />
         <div id="codecap-preview">
-          <div className="controls">
+          <div className={"controls "+(if @state.playing then "playing" else "")}>
             <div onClick={@play}><a className="controls-play" href="#"></a></div>
             <div  onMouseMove={@handleMouseMove} ref="playbackLine" className="playback-line">
-              <span style={{left: @playbackLocationIndicatorPosition()+"%"}} className="playback-location" />
+              <span style={{left: @playbackLocationIndicatorPosition()+"px"}} className="playback-location" />
             </div>
           </div>
 
           
           <textarea className="editor-2" ref="editor2" />
           <ul id="shortcut-history">
-            {@state.shortcutHistory.toJS().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}</ul>
+            {@state.shortcutHistory.toJS().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
+            <li key="playback">{@state.playbackLocation}, {@playbackLocationIndicatorPosition()}</li>
+            <li key="history-length">{@state.history.length}</li>
+          </ul>
+            
         </div>
       </div>
