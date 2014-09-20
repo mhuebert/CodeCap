@@ -30,33 +30,40 @@ module.exports = React.createClass
     @editor.on 'cursorActivity', @handleCursorActivity
     @editor.on 'keyHandled', @handleKey
 
+  _lastEvent: 0
+  getDelta: ->
+    now = Date.now()
+    delta = now - @_lastEvent
+    @_lastEvent = now
+    return delta
   handleKey: (cm, name, event) ->
     history = @state.history.concat [
       type: "key-combo"
       name: name
+      time: @getDelta()
     ]
     @setState history: history
   handleChanges: (cm, changes) ->
     history =  @state.history.concat [
       type: "text"
-      time: Date.now()
+      time: @getDelta()
       changes: changes 
     ]
     @setState history: history
 
-  
+
   handleCursorActivity: (cm) ->
     selections = cm.listSelections()
     if selections.length == 1 and selections[0].anchor.ch == selections[0].head.ch
       change =
         type: "cursor"
         cursor: selections[0].head
-        time: Date.now()
+        time: @getDelta()
     else
       change = 
         type: "selections"
         selections: selections
-        time: Date.now()
+        time: @getDelta()
     history = @state.history.concat [change]
     @setState history: history
 
@@ -73,6 +80,8 @@ module.exports = React.createClass
       when "selections"
         @editor2.setSelections change.selections
   
+  speed: 2.5
+
   play: ->
     if @state.playing or @state.history.length == 0
       @setState {playing: false}
@@ -96,7 +105,7 @@ module.exports = React.createClass
       @setState {playbackLocation: frameIndex}, ->
         setTimeout ->
           playFrom(frameIndex+1)
-        , timeOut
+        , (change.time/@speed)
     @setState {playing: true}, ->
       playFrom(Math.round startLocation)
     false
@@ -119,6 +128,7 @@ module.exports = React.createClass
     playbackLine = this.refs.playbackLine.getDOMNode()
     rect = playbackLine.getBoundingClientRect()
     offset = (e.clientX - rect.left)
+    @setState playing: false
     if 0 <= offset <= rect.width
       @goTo (offset/rect.width) * @state.history.length
 
