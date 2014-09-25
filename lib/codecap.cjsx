@@ -1,5 +1,5 @@
 require("codemirror/lib/codemirror.css")
-require("../style.css")
+require("../styles.styl")
 
 React = require("react")
 CodeMirror = require("codemirror")

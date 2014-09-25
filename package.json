@@ -17,7 +17,8 @@
     "coffee-loader": "^0.7.2",
     "react": "^0.11.2",
     "codemirror": "^4.5.0",
-    "webpack-dev-server": "^1.6.5"
+    "webpack-dev-server": "^1.6.5",
+    "stylus-loader": "^0.4.0"
   },
   "dependencies": {
     "style-loader": "^0.8.0",

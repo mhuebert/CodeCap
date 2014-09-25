@@ -1,0 +1,93 @@
+body
+  font-family "OCR A Std", "Menlo", "Andale Mono", courier
+  background #eee
+  text-align center
+
+.CodeMirror
+  text-align left
+
+#shortcut-history
+  text-align left
+  position absolute
+  padding 0
+  margin 0
+  top 40px
+  left 560px
+  float left
+  vertical-align top
+  font-size 16px
+  width 130px
+  height 46px
+  opacity 0.5
+  li
+    list-style none
+
+#codecap-preview, #codecap-source
+  margin 30px auto
+  max-width 550px
+  position relative
+
+  // #codecap-source
+  .CodeMirror
+    height 100px
+
+.playback-line
+  background #ddd
+  height 100%
+  position relative
+  margin-left 29px
+
+.playback-location
+  height 100%
+  width 4px
+  position absolute
+  background #aaa
+  margin-left -1px
+
+.controls
+  height 30px
+  text-align left
+  a
+    cursor pointer
+    text-decoration none
+    display inline-block
+    color black
+    &:hover
+      background #008ac4
+
+.controls-play
+  float left
+  height 100%
+  width 29px
+  background #00aaf1
+  display inline-block
+  position relative
+  &::after
+    display inline-block
+    width 0
+    height 0
+    border-top 8px solid transparent
+    border-bottom 8px solid transparent
+    border-left 12px solid white
+    position absolute
+    top 50%
+    left 50%
+    margin-left -5px
+    margin-top -7px
+    content " "
+
+.playing
+  .controls-play
+    &::after
+      display inline-block
+      width 10px
+      height 10px
+      background white
+      position absolute
+      top 50%
+      left 50%
+      margin-left -5px
+      margin-top -5px
+      content " "
+      border none
+

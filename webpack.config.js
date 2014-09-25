@@ -12,13 +12,14 @@ module.exports = {
       new webpack.NoErrorsPlugin()
     ],
     resolve: {
-      extensions: ['', '.js', 'coffee', '.cjsx']
+      extensions: ['', '.js', 'coffee', '.cjsx', '.styl']
     },
     module: {
         loaders: [
             { test: /\.cjsx$/, loaders: ['react-hot', 'coffee-loader', 'cjsx-loader']},
             { test: /\.coffee$/, loader: 'coffee' },
-            { test: /\.css$/, loader: "style!css" }
+            { test: /\.css$/, loader: "style!css" },
+            { test: /\.styl$/, loader: 'style-loader!css-loader!stylus-loader' }
         ]
     }
 };
