@@ -7,10 +7,6 @@ Immutable = require("immutable")
 {Vector} = Immutable
 Draggable = require('react-draggable')
 
-logChange = (change) ->
-  console.log "#{change.from.line}:#{change.from.ch} to #{change.to.line}:#{change.to.ch} - #{change.date}"
-  change
-
 editorSettings = 
   mode: "clojure"
   lineNumbers: false
@@ -31,7 +27,7 @@ module.exports = React.createClass
   componentDidMount: ->
     window.e2 = @editor = CodeMirror.fromTextArea @refs.editor.getDOMNode(), editorSettings # _(editorSettings).chain().clone().value() #.extend({readOnly: true})
  
-    @editor.on 'changes', @editorEvent("changes")
+    @editor.on 'change', @editorEvent("change")
     @editor.on 'cursorActivity', @editorEvent("cursor")
     @editor.on 'keyHandled', @editorEvent("key")
   
@@ -51,26 +47,30 @@ module.exports = React.createClass
       change = @changeHandlers[name].apply(this, arguments)
       change.index = @state.history.get(@state.currentBranch).get("operations").length
       change.time = @getDelta()
-      history = @state.history.updateIn [@state.currentBranch, "operations"], (vec) -> vec.concat([change])
+      if change.time < 10 and @state.history.get(@state.currentBranch).get("operations").length > 0
+        history = @state.history.updateIn [@state.currentBranch, "operations"], (vec) ->
+          index = vec.length-1
+          ops = vec.get(index)
+          ops.push(change)
+          vec.set index, ops
+        offset = @state.currentOffset
+      else
+        history = @state.history.updateIn [@state.currentBranch, "operations"], (vec) -> vec.push [change]
+        offset = @state.currentOffset+1
       @setState 
         history: history
-        currentOffset: @state.currentOffset + 1
+        currentOffset: offset
 
   changeHandlers:
     key: (cm, name, event) ->
       type: "key-combo"
       name: name
-    changes: (cm, changes) ->
-      if changes.length > 1
-        console.log changes.map (c) -> "#{c.from.ch}:#{c.to.ch}"
+    change: (cm, change) ->
       type: "text"
-      changes: changes.map (change, index) ->
-        from: _(change.from).clone()
-        to: _(change.to).clone()
-        text: change.text.slice()
-        removed: change.removed.slice()
-        date: "#{index} - #{Date.now()}"
-        index: index
+      from: _(change.from).clone()
+      to: _(change.to).clone()
+      text: change.text.slice()
+      removed: change.removed.slice()
     cursor: (cm) ->
       selections = cm.listSelections()
       if selections.length == 1 and selections[0].anchor.ch == selections[0].head.ch
@@ -83,71 +83,55 @@ module.exports = React.createClass
           selections: selections
       change
 
-  applyOperation: (change) ->
-    console.log "Operation ##{change.index}"
-    switch change.type
-      when "text"
-        if change.changes.length > 1
-          console.log change.changes.map (c) -> "#{c.from.ch}:#{c.to.ch}   #{c.text.join("")}  -  #{c.removed.join("")}"
-        else
-          console.log change.changes[0]
-        for c in change.changes
-          # if change.changes.length > 1
-          # console.log "Operation...#{c.index}, t: #{c.text.join("")}, r: #{c.removed.join("")}", -((c.from.line * 1000) + c.from.ch)
-          # console.log "replaceRange", c.text.join("\\n"), c.from, c.to
-          @editor.replaceRange c.text.join("\n"), c.from, c.to
-      when "key-combo"
-        @setState shortcutHistory: @state.shortcutHistory.concat [change.name]
-      when "cursor"
-        @editor.focus()
-        @editor.setCursor change.cursor
-      when "selections"
-        @editor.setSelections change.selections
+  applyOperation: (changes) ->
+    for change in changes
+      switch change.type
+        when "text"
+          @editor.replaceRange change.text.join("\n"), change.from, change.to
+        when "key-combo"
+          @setState shortcutHistory: @state.shortcutHistory.concat [change.name]
+        when "cursor"
+          @editor.focus()
+          @editor.setCursor change.cursor
+        when "selections"
+          @editor.setSelections change.selections
   
   
 
-  # play: ->
-  #   if @state.playing or @state.history.get("/").length == 0
-  #     @setState {playing: false}
-  #     return
-    
-  #   if @state.currentOffset == @state.history.get("/").length-1 
-  #     startLocation = 0
-  #     @goTo 0
-  #   else 
-  #     startLocation = @state.currentOffset+1
+  play: ->
+    if @state.history.get("/").get("operations").length == 0
+      return
+    if @state.currentOffset == @state.history.get("/").get("operations").length
+      return
 
-  #   playFrom = (frameIndex) =>
-  #     if frameIndex == @state.history.get("/").length or !@state.playing
-  #       @setState {playing: false}
-  #       return
-  #     change = @state.history.get("/").get(frameIndex)
-  #     @applyOperation change
-  #     timeOut = switch change.type
-  #       when "key-combo" then 0
-  #       else 30
-  #     @setState {currentOffset: frameIndex}, ->
-  #       setTimeout ->
-  #         playFrom(frameIndex+1)
-  #       , Math.min((change.time/@speed), 500)
-  #   @setState {playing: true}, ->
-  #     playFrom(Math.round startLocation)
-  #   false
+    change = @state.history.get("/").get("operations").get(@state.currentOffset)
+    @_locked = true
+    @applyOperation change
+    @_locked = false
+
+    timeOut = switch change[0].type
+      when "key-combo" then 0
+      else 100
+    @setState {currentOffset: @state.currentOffset + 1}, =>
+      setTimeout @play, timeOut
+    false
 
   currentOffsetIndicatorPosition: ->
     width = this.refs.timeline?.getDOMNode().getBoundingClientRect().width
     Math.round (@state.currentOffset / (Math.max(0, @state.history.get("/").get("operations").length)) * width)
 
   goTo: (index) ->
+    if index == 0
+      @editor.doc.setValue ""
+      @setState currentOffset: 0
+      return
     
     [currentLocation, finish] = [Math.round(@state.currentOffset), Math.round(index)]
     currentOperations = @state.history.get(@state.currentBranch).get("operations").toJS()
     operations = switch
       when currentLocation < finish
-        console.log "moving from #{currentLocation} to #{finish}"
         currentOperations[currentLocation...finish]
       when currentLocation > finish
-        console.log "moving from #{currentLocation} to #{finish} (inverse)"
         _(currentOperations[finish...currentLocation]).chain().reverse().map(@inverse).value()
       else
         []
@@ -161,30 +145,20 @@ module.exports = React.createClass
       
   
   invertOperation: (op) ->
+    if op.type != "text"
+      return op
     newOp = _(op).clone()
     newOp.text = op.removed.slice()
     newOp.removed = op.text.slice()
     newOp.from = _(op.from).clone()
-    if newOp.removed.join("") != ""
+    if newOp.removed.join("*") != ""
       newOp.to = CodeMirror.changeEnd(op)
     else
       newOp.to = newOp.from
-    # if op.text.join("") != ""
-    #   newOp.to = CodeMirror.changeEnd(op)
-    # else
-    #   newOp.to = _(op.to).clone()
     newOp
 
-  inverse: (changeset) ->
-    if changeset.type != "text"
-      return changeset
-    c = _(changeset).clone()
-    c.changes = _(changeset.changes).chain()
-                        .map(@invertOperation)
-                        .sortBy (op) -> op.from.ch
-                        .sortBy (op) -> op.from.line
-                        .value()
-    c
+  inverse: (changes) ->
+    _(changes).map(@invertOperation).reverse()
   handleMouseMove: (e) ->
     timelineDimensions = this.refs.timeline.getDOMNode().getBoundingClientRect()
     mouseLeftOffset = (e.clientX - timelineDimensions.left)
@@ -212,8 +186,6 @@ module.exports = React.createClass
         <span className={"bar"+(if bar.name == @state.currentBranch then " active" else "")}>{bar.name} - {bar.length}</span>
       }
     </div>
-
-
 
       <div className={"controls "+(if @state.playing then "playing" else "")}>
         <div onClick={@play}><a className="controls-play" href="#"></a></div>
