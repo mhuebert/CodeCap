@@ -24,6 +24,7 @@ module.exports = Recorder = (options={}) ->
     e.on 'change', editorEvent("change")
     e.on 'cursorActivity', editorEvent("cursor")
     e.on 'keyHandled', editorEvent("key")
+    # e.on "changes", (cm, changes) -> console.log "here", changes.length
     editor = e
 
   getDelta = ->
@@ -125,8 +126,11 @@ module.exports = Recorder = (options={}) ->
     if operations.length > 0
       exp.currentOffset = Math.round(index)
       _locked = true
-      for change in operations
-        applyOperation(change)
+      t1 = Date.now()
+      editor.operation ->
+        for change in operations
+          applyOperation(change)
+      console.log "Took #{Date.now() - t1}ms"
       _locked = false
   invertOperation = (op) ->
     if op.type != "text"
