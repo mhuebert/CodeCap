@@ -3,9 +3,9 @@ CodeMirror = require("codemirror")
 require("codemirror/keymap/sublime.js")
 require("codemirror/mode/clojure/clojure.js")
 window._ = _ = require("underscore")
-Immutable = require("immutable")
-{Vector} = Immutable
 Draggable = require('react-draggable')
+
+
 
 editorSettings = 
   mode: "clojure"
@@ -19,10 +19,14 @@ editorSettings =
 
 module.exports = React.createClass
   getInitialState: ->
-    history: Immutable.fromJS {"/": {operations: []}}
-    shortcutHistory: Vector()
+    newBranchName = Date.now()
+    history = {}
+    history[newBranchName] = {ops: []}
+
+    history: history
+    shortcutHistory: []
     currentOffset: 0
-    currentBranch: "/"
+    currentBranch: newBranchName
 
   componentDidMount: ->
     window.e2 = @editor = CodeMirror.fromTextArea @refs.editor.getDOMNode(), editorSettings # _(editorSettings).chain().clone().value() #.extend({readOnly: true})
@@ -40,22 +44,23 @@ module.exports = React.createClass
   _locked: false
   speed: 2.5
   events: 1
-
+  currentBranch: ->
+    @state.history[@state.currentBranch]
   editorEvent: (name) ->
     =>
       return if @_locked == true
       change = @changeHandlers[name].apply(this, arguments)
-      change.index = @state.history.get(@state.currentBranch).get("operations").length
+      change.index = @currentBranch().ops.length
       change.time = @getDelta()
-      if change.time < 10 and @state.history.get(@state.currentBranch).get("operations").length > 0
-        history = @state.history.updateIn [@state.currentBranch, "operations"], (vec) ->
-          index = vec.length-1
-          ops = vec.get(index)
-          ops.push(change)
-          vec.set index, ops
+      history = @state.history
+      branch = history[@state.currentBranch]
+      if change.time < 10 and branch.ops.length > 0
+        index = branch.ops.length-1
+        changeset = branch.ops[index]
+        changeset.push(change)
         offset = @state.currentOffset
       else
-        history = @state.history.updateIn [@state.currentBranch, "operations"], (vec) -> vec.push [change]
+        branch.ops.push([change])
         offset = @state.currentOffset+1
       @setState 
         history: history
@@ -95,16 +100,15 @@ module.exports = React.createClass
           @editor.setCursor change.cursor
         when "selections"
           @editor.setSelections change.selections
-  
-  
 
   play: ->
-    if @state.history.get("/").get("operations").length == 0
+    branch = @currentBranch()
+    if branch.ops.length == 0
       return
-    if @state.currentOffset == @state.history.get("/").get("operations").length
+    if @state.currentOffset == branch.ops.length
       return
 
-    change = @state.history.get("/").get("operations").get(@state.currentOffset)
+    change = branch.ops[@state.currentOffset]
     @_locked = true
     @applyOperation change
     @_locked = false
@@ -118,7 +122,7 @@ module.exports = React.createClass
 
   currentOffsetIndicatorPosition: ->
     width = this.refs.timeline?.getDOMNode().getBoundingClientRect().width
-    Math.round (@state.currentOffset / (Math.max(0, @state.history.get("/").get("operations").length)) * width)
+    Math.round (@state.currentOffset / (Math.max(0, @currentBranch().ops.length)) * width)
 
   goTo: (index) ->
     if index == 0
@@ -127,12 +131,11 @@ module.exports = React.createClass
       return
     
     [currentLocation, finish] = [Math.round(@state.currentOffset), Math.round(index)]
-    currentOperations = @state.history.get(@state.currentBranch).get("operations").toJS()
     operations = switch
       when currentLocation < finish
-        currentOperations[currentLocation...finish]
+        @currentBranch().ops[currentLocation...finish]
       when currentLocation > finish
-        _(currentOperations[finish...currentLocation]).chain().reverse().map(@inverse).value()
+        _(@currentBranch().ops[finish...currentLocation]).chain().reverse().map(@inverse).value()
       else
         []
     
@@ -165,16 +168,16 @@ module.exports = React.createClass
     @setState playing: false
     if 0 <= mouseLeftOffset <= timelineDimensions.width
       percentOffset = (mouseLeftOffset/timelineDimensions.width)
-      zeroIndexedFrame =  percentOffset * (Math.max @state.history.get(@state.currentBranch).get("operations").length, 0)
+      zeroIndexedFrame =  percentOffset * (Math.max @currentBranch().ops.length, 0)
       @goTo zeroIndexedFrame
 
   bars: ->
     bars = []
-    for key, val of @state.history.toJS()
+    for key, val of @state.history
       bars.push 
         name: key
-        operations: val.operations
-        length: val.operations.length
+        ops: val.ops
+        length: val.ops.length
     bars
 
   render: ->
@@ -198,13 +201,13 @@ module.exports = React.createClass
       
       <textarea className="editor-2" ref="editor" />
       <ul id="shortcut-history">
-        {@state.shortcutHistory.toJS().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
+        {@state.shortcutHistory.reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
         <li key="playback">
           Loc: {@state.currentOffset}
           <br/>
           PlayPos:{@currentOffsetIndicatorPosition()}
           <br/>
-          HistoryCount:{@state.history.get(@state.currentBranch).get("operations").length}
+          HistoryCount:{@currentBranch().ops.length}
         </li>
         
       </ul>
