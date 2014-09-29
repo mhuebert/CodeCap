@@ -41,8 +41,12 @@ body.updating-cm .CodeMirror
   position relative
 
   // #codecap-source
-  .CodeMirror
-    height 150px
+.CodeMirror
+  // height 150px
+  height auto
+.CodeMirror-scroll 
+  overflow-y: hidden
+  overflow-x: auto
 
 .playback-line
   background #ddd
