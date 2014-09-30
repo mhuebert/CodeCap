@@ -40,8 +40,10 @@ module.exports = React.createClass
     @setState lastRendered: Date.now()
     false
   handleMouseLeave: ->
+    return false if @recorder.playing()
     @recorder.goToLocation(@recorder.marker())
   handleMouseMove: (e) ->
+    return false if @recorder.playing()
     {width, left} = this.refs.timeline.getDOMNode().getBoundingClientRect()
     mouseLeftOffset = (e.clientX - left)
     if 0 <= mouseLeftOffset <= width
@@ -51,6 +53,7 @@ module.exports = React.createClass
 
   handleBarMove: (bar) ->
     (e) =>
+      return false if @recorder.playing()
       {width, left} = this.refs[bar.name].getDOMNode().getBoundingClientRect()
       mouseLeftOffset = (e.clientX - left)
       if 0 <= mouseLeftOffset <= width
@@ -79,18 +82,17 @@ module.exports = React.createClass
                ref={bar.name}
                key={bar.name}
                className="bar">
-               <span className={"targetIndicator "+(if marker.branch != bar.name then "hidden" else "")}
-                     style={{left: (marker.offset / bar.branch.ops.length)*100+"%"}} />
-               <span className={"playbackLocation "+(if location.branch != bar.name then "hidden" else "")}
-                     style={{left: (location.offset / bar.branch.ops.length)*100+"%"}} />
-               <span className={"activeAreaOfBar"} style={{width: bar.activeWidth+"%"}} />
+                {
+                  bar.annotations.map (annotation, index) ->
+                    <span key={annotation.className+index} className={annotation.className} style={annotation.styles} />
+                }
           </div>
         }
       </div>
 
         <div className={"controls "+(if @recorder.playing() then "playing" else "")}>
           <div onClick={@recorder.togglePlay}><a className="controls-play" href="#"></a></div>
-          <div  onMouseMove={@handleMouseMove} ref="timeline" className="playback-line">
+          <div  onMouseMove={@handleMouseMove} ref="timeline" className=" playback-line">
             <span style={{left: Math.min(100, ((location.preOffset + location.offset) / (marker.preOffset + marker.offset) * 100))+"%"}} className="playbackLocation" />
           </div>
         </div>

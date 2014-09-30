@@ -23,7 +23,7 @@ Recorder = (options={}) ->
   api.togglePlay = -> 
     _playing = !_playing; 
     if _playing
-      api.goToLocation {branch: _location.branch, offset: 0}
+      api.goToLocation {branch: "root", offset: 0}
     play()
 
   api.speed = ->            _speed
@@ -133,6 +133,7 @@ Recorder = (options={}) ->
     _marker = 
       branch: _location.branch
       offset: Math.round(_location.offset)
+    _editor.focus()
 
   api.goToLocation = (destination) ->
     return if !destination.branch?
@@ -158,12 +159,27 @@ Recorder = (options={}) ->
         when name in ancestors
           offset = history[ancestors[ancestors.indexOf(name)+1]].offset
           offset / branch.ops.length * 100
+      active = name in api.branch().ancestors or name == _location.branch
+      annotations = []
+      if _marker.branch == name
+        annotations.push
+          className: "targetIndicator"
+          styles: {left: (_marker.offset / branch.ops.length)*100+"%"}
+      if _location.branch == name
+        annotations.push
+          className: "playbackLocation"
+          styles: {left:(_location.offset / branch.ops.length)*100+"%"}
+      if activeWidth > 0
+        annotations.push
+          className: "activeAreaOfBar"
+          styles: {width: activeWidth+"%"}
       bar = 
         name: name
         branch: branch
         totalWidth: totalWidth
         activeWidth: activeWidth || 0
-        active: name in api.branch().ancestors or name == _location.branch
+        active: active
+        annotations: annotations
       bars.push bar
       width = totalWidth if totalWidth > width
     # bars = _(bars).sortBy((bar) -> bar.branch.ancestors.slice(-1)[0])
