@@ -40,10 +40,8 @@ module.exports = React.createClass
     @setState lastRendered: Date.now()
     false
   handleMouseLeave: ->
-    return false if @recorder.playing()
     @recorder.goToLocation(@recorder.marker())
   handleMouseMove: (e) ->
-    return false if @recorder.playing()
     {width, left} = this.refs.timeline.getDOMNode().getBoundingClientRect()
     mouseLeftOffset = (e.clientX - left)
     if 0 <= mouseLeftOffset <= width
@@ -53,7 +51,6 @@ module.exports = React.createClass
 
   handleBarMove: (bar) ->
     (e) =>
-      return false if @recorder.playing()
       {width, left} = this.refs[bar.name].getDOMNode().getBoundingClientRect()
       mouseLeftOffset = (e.clientX - left)
       if 0 <= mouseLeftOffset <= width

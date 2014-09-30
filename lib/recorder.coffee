@@ -14,6 +14,7 @@ Recorder = (options={}) ->
     offset: 0
     branch: "root"
   _shortcutHistory = []
+  _movingToMarker = false
 
   api = {}
   
@@ -23,7 +24,7 @@ Recorder = (options={}) ->
   api.togglePlay = -> 
     _playing = !_playing; 
     if _playing
-      api.goToLocation {branch: "root", offset: 0}
+      api.goToLocation {branch: "root", offset: 0}, true
     play()
 
   api.speed = ->            _speed
@@ -56,7 +57,11 @@ Recorder = (options={}) ->
       _editor.on 'change', options.onChange
     _editor.on 'cursorActivity', editorEvent("cursor")
     _editor.on 'keyHandled', editorEvent("key")
-    
+    _editor.on 'beforeChange', (cm, change) -> 
+      if !branchesEqual(_location, _marker) and _movingToMarker == false
+        change.cancel()
+  branchesEqual = (b1, b2) ->
+    b1.branch == b2.branch and Math.round(b1.offset) == Math.round(b2.offset)
   api.branch = (name=null) ->
     if !name
       return history[_location.branch]
@@ -109,7 +114,7 @@ Recorder = (options={}) ->
     if i1 == i2
       [branch, i1, i2]  = pathBetweenLocations(history, _location, _marker)[1]
 
-    api.goToLocation { branch: branch, offset: i1+1 }
+    api.goToLocation { branch: branch, offset: i1+1 }, true
     setTimeout play, 100
     false
 
@@ -135,15 +140,18 @@ Recorder = (options={}) ->
       offset: Math.round(_location.offset)
     _editor.focus()
 
-  api.goToLocation = (destination) ->
+  api.goToLocation = (destination, force=false) ->
     return if !destination.branch?
+    return if _playing == true and force == false
     operations = opsBetweenLocations(history, _location, destination)
     if operations.length > 0
+      _movingToMarker = true if branchesEqual(_marker, destination)
       _locked = true
       _editor.operation ->
         for changes in operations
           applyChanges(_editor, changes)
       _locked = false
+      _movingToMarker = false
     _location = destination
 
   api.branches = ->
