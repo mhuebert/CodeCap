@@ -5,27 +5,38 @@ _ = require("underscore")
 
 Recorder = (options={}) ->
   _locked = false
-  _editor = options.editor || {}
+  _editor = {}
   _timer = IntervalTimer()
   _speed = 2.5
   _playing = false
-  _location =
-    offset: options.offset || 0
-    branch: Date.now().toString()
+  _onChange = ->
+  _location = _marker =
+    offset: 0
+    branch: "root"
   _shortcutHistory = []
 
   api = {}
   
   api.playing = ->    _playing
-  api.play = ->       api.playing = true; play()
-  api.stop = ->       api.playing = false
-  api.togglePlay = -> api.playing = !api.playing; play()
+  api.play = ->       _playing = true; play()
+  api.stop = ->       _playing = false
+  api.togglePlay = -> 
+    _playing = !_playing; 
+    if _playing
+      api.goToLocation {branch: _location.branch, offset: 0}
+    play()
 
   api.speed = ->            _speed
   api.setSpeed = (speed) -> _speed = speed
 
-  api.location = ->  _(_location).clone()
-
+  api.location = ->  
+    location = _(_location).clone()
+    location.preOffset = history[_location.branch].preOffset
+    location
+  api.marker = ->  
+    marker = _(_marker).clone()
+    marker.preOffset = history[_marker.branch].preOffset
+    marker
   api.shortcutHistory = -> _shortcutHistory.slice()
 
   if !options.history
@@ -37,12 +48,14 @@ Recorder = (options={}) ->
       preOffset: 0
       ancestors: []
   
-  api.loadEditor = (editor) ->
-    _editor = editor
+  api.initialize = (options) ->
+    _editor = api.editor = options.editor
+    _onChange = options.onChange
     _editor.on 'change', editorEvent("change")
+    if options.onChange
+      _editor.on 'change', options.onChange
     _editor.on 'cursorActivity', editorEvent("cursor")
     _editor.on 'keyHandled', editorEvent("key")
-    # e.on "changes", (cm, changes) -> console.log "here", changes.length
     
   api.branch = (name=null) ->
     if !name
@@ -55,6 +68,7 @@ Recorder = (options={}) ->
       change = changeHandlers[name].apply(this, arguments)
       change.index = history[_location.branch].ops.length
       change.time = _timer.getInterval()
+
       if _location.offset != api.branch().ops.length
         # We are not at the end of a branch, so create a new one:
         if change.type != "text"
@@ -81,39 +95,79 @@ Recorder = (options={}) ->
       else
         branch.ops.push([change])
         _location.offset = _location.offset+1
+      _marker = _(_location).clone()
+
 
   play = ->
-    if _location.offset == api.branch().ops.length or api.playing == false
+    [b1, o1, b2, o2] = [_location.branch, Math.round(_location.offset), _marker.branch, Math.round(_marker.offset)]
+    if (b1 == b2 and o1 >= o2) or _playing == false
+      _playing = false
+      _onChange()
       return
-    api.goTo {branch: _location.branch, location: _location.offset+1}
-    setTimeout play, changeTimeout(api.branch().ops[_location.offset-1])
+
+    [branch, i1, i2] = pathBetweenLocations(history, _location, _marker)[0]
+    if i1 == i2
+      [branch, i1, i2]  = pathBetweenLocations(history, _location, _marker)[1]
+
+    api.goToLocation { branch: branch, offset: i1+1 }
+    setTimeout play, 100
     false
-  
-  api.goTo = (destination) ->
-    # operations = opsFromList(history[_location.branch].ops, _location.offset, destination.offset)
+
+  api.goToMarkerPercentOffset = (percentOffset) ->
+    markerBranch = history[_marker.branch]
+    absoluteOffset = markerBranch.preOffset + _marker.offset
+    targetOffset = percentOffset * absoluteOffset
+    target = {}
+    ancestorChain = markerBranch.ancestors.concat [markerBranch.name]
+    for ancestorName, index in ancestorChain
+
+      [ancestor, nextAncestor] = [history[ancestorName], history[ancestorChain[index+1]]]
+      upperOffsetBound = if nextAncestor then (ancestor.preOffset + nextAncestor.offset) else ancestor.preOffset + ancestor.ops.length
+      if targetOffset < upperOffsetBound
+        target.branch = ancestor.name
+        target.offset = targetOffset - ancestor.preOffset
+        break
+    api.goToLocation(target)
+
+  api.setMarkerHere = ->
+    _marker = 
+      branch: _location.branch
+      offset: Math.round(_location.offset)
+
+  api.goToLocation = (destination) ->
+    return if !destination.branch?
     operations = opsBetweenLocations(history, _location, destination)
     if operations.length > 0
-      # _location.offset = Math.round(offset)
       _locked = true
       _editor.operation ->
         for changes in operations
           applyChanges(_editor, changes)
       _locked = false
     _location = destination
-    
+
   api.branches = ->
     bars = []
     width = 0
-    for key, val of history
-      totalWidth = val.preOffset + val.ops.length
+    currentBranch = history[_location.branch]
+    ancestors = currentBranch.ancestors.concat(_location.branch)
+    for name, branch of history
+      totalWidth = branch.preOffset + branch.ops.length
+      activeWidth = switch
+        when name == _location.branch
+          _location.offset / branch.ops.length * 100
+        when name in ancestors
+          offset = history[ancestors[ancestors.indexOf(name)+1]].offset
+          offset / branch.ops.length * 100
       bar = 
-        name: key
-        branch: val
+        name: name
+        branch: branch
         totalWidth: totalWidth
-        active: key in api.branch().ancestors or key == _location.branch
+        activeWidth: activeWidth || 0
+        active: name in api.branch().ancestors or name == _location.branch
       bars.push bar
       width = totalWidth if totalWidth > width
-    bars = _(bars).sortBy((bar) -> bar.branch.preOffset)
+    # bars = _(bars).sortBy((bar) -> bar.branch.ancestors.slice(-1)[0])
+    bars = _(bars).sortBy(-name)
     totalWidth: width
     bars: bars
   api
@@ -148,7 +202,7 @@ applyChanges = (editor, changes) ->
       when "selections"
         editor.setSelections change.selections
 
-changeTimeout = (changes) ->
+changeTimeout = (changes=[{}]) ->
   switch changes[0].type
     when "key-combo" then 0
     else 100
@@ -189,10 +243,6 @@ IntervalTimer = ->
 
 opsFromList = (list, i1, i2) ->
   [i1, i2] = [Math.round(i1), Math.round(i2)]
-  # operations = Array.prototype.slice.apply(list, [i1, i2].sort().reverse())
-  # if i1 > i2
-  #   operations = _(operations).chain().reverse().map(invertChanges).value()
-  # operations
   switch
     when i1 < i2
       list[i1...i2]
@@ -227,31 +277,6 @@ opsBetweenLocations = (history, loc1, loc2) ->
   for p in path
     [branchName, i1, i2] = p
     operations = operations.concat opsFromList(history[branchName].ops, i1, i2)
-  # [loc1, loc2] = [history[loc1.branch], history[loc2.branch]]
-  # if loc1.name == loc2.name
-  #   return opsFromList(loc1.ops, loc1.offset, loc2.offset)
-  # branchNames = [loc1.branch].concat _(loc1.ancestors).without(loc2.ancestors), _(loc2.ancestors).without(loc1.ancestors)
-  # if branchNames[branchNames.length-1] != loc2.branch
-  #   branchNames.push loc2.branch
-  # operations = []
-  # currentOffset = loc1.offset
-  # finalOffset = Math.round(loc2.offset)
-  # for name, index in branchNames
-  #   [b1, b2] = [history[name], history[branchNames[index+1]]]
-  #   if typeof b2 == 'undefined'
-  #     operations = operations.concat opsFromList(b1.ops, currentOffset, finalOffset)
-  #     path.push "#{b1.name}: #{currentOffset}>#{finalOffset}"
-  #   else if b1.ancestors[b1.ancestors.length-1] == b2.name
-  #     operations = operations.concat opsFromList(b1.ops, currentOffset, 0)
-  #     path.push "#{b1.name}: #{currentOffset}>#{0}"
-  #     currentOffset = b1.offset
-  #   else if b2.ancestors[b2.ancestors.length-1] == b1.name
-  #     operations = operations.concat opsFromList(b1.ops, currentOffset, b2.offset)
-  #     path.push "#{b1.name}: #{currentOffset}>#{b2.offset}"
-  #     currentOffset = 0
-  #   else
-  #     path.push "LOST: #{b1.name}, #{currentOffset}"
-  # console.log path, operations.length, operations
   operations
 
 module.exports = Recorder

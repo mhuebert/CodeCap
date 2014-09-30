@@ -7,6 +7,7 @@ Recorder = require("./recorder.coffee")
 
 editorSettings = 
   mode: "clojure"
+  tabSize: 2
   lineNumbers: false
   lineWrapping: true
   smartIndent: true
@@ -14,28 +15,38 @@ editorSettings =
   viewportMargin: Infinity
   theme: 'solarized-light'
   keyMap: 'sublime'
-  # editor.setOption("readOnly", true)
 
 module.exports = React.createClass
   
   recorder: Recorder()
 
   componentDidMount: ->
-    @recorder.loadEditor CodeMirror.fromTextArea(@refs.editor.getDOMNode(), editorSettings)
+    @recorder.initialize
+      editor: CodeMirror.fromTextArea(@refs.editor.getDOMNode(), editorSettings)
+      onChange: => @setState lastRendered: Date.now() 
+    # @recorder.editor.on "changes", => 
+    #   @setState lastRendered: Date.now()
 
   currentOffsetIndicatorPosition: ->
     width = this.refs.timeline?.getDOMNode().getBoundingClientRect().width
-    Math.round (@recorder.location.offset / (Math.max(0, @recorder.branch().ops.length)) * width)
+    location = @recorder.location()
+    marker = @recorder.marker()
+    percent = (location.preOffset + location.offset) / (Math.max(0, (marker.preOffset + marker.offset)))
+    Math.min (percent * width), width
   
+  handleClick: ->
+    @recorder.setMarkerHere()
+    # @recorder.editor.focus()
+    @setState lastRendered: Date.now()
+    false
+  handleMouseLeave: ->
+    @recorder.goToLocation(@recorder.marker())
   handleMouseMove: (e) ->
     {width, left} = this.refs.timeline.getDOMNode().getBoundingClientRect()
     mouseLeftOffset = (e.clientX - left)
     if 0 <= mouseLeftOffset <= width
       percentOffset = (mouseLeftOffset/width)
-      zeroIndexedFrame =  percentOffset * (Math.max @recorder.branch().ops.length, 0)
-      @recorder.goTo 
-        branch: @recorder.location().branch
-        offset: zeroIndexedFrame
+      @recorder.goToMarkerPercentOffset(percentOffset)
       @setState lastRendered: Date.now()
 
   handleBarMove: (bar) ->
@@ -45,50 +56,55 @@ module.exports = React.createClass
       if 0 <= mouseLeftOffset <= width
         percentOffset = (mouseLeftOffset/width)
         zeroIndexedFrame =  percentOffset * (Math.max @recorder.branch(bar.name).ops.length, 0)
-        @recorder.goTo 
+        @recorder.goToLocation 
           branch: bar.name
           offset: zeroIndexedFrame
         @setState lastRendered: Date.now()
 
-
   render: ->
     {bars, totalWidth} = @recorder.branches()
+    marker = @recorder.marker()
+    location = @recorder.location()
+
     @transferPropsTo <div id="codecap">
+    <div className="codecap-header"  onMouseLeave={@handleMouseLeave} onMouseEnter={@handleMouseEnter}>
+      <div className="branch-timeline">
+        {bars.map (bar) =>
+          barStyle =
+            marginLeft: (bar.branch.preOffset/totalWidth)*100+"%"
+            width: (bar.branch.ops.length/totalWidth)*100+"%"
+          <div onMouseMove={@handleBarMove(bar)} 
+               onClick={@handleClick}
+               style={barStyle} 
+               ref={bar.name}
+               key={bar.name}
+               className="bar">
+               <span className={"targetIndicator "+(if marker.branch != bar.name then "hidden" else "")}
+                     style={{left: (marker.offset / bar.branch.ops.length)*100+"%"}} />
+               <span className={"playbackLocation "+(if location.branch != bar.name then "hidden" else "")}
+                     style={{left: (location.offset / bar.branch.ops.length)*100+"%"}} />
+               <span className={"activeAreaOfBar"} style={{width: bar.activeWidth+"%"}} />
+          </div>
+        }
+      </div>
 
-    <div className="branch-timeline">
-      {bars.map (bar) =>
-        barStyle =
-          marginLeft: (bar.branch.preOffset/totalWidth)*100+"%"
-          width: (bar.branch.ops.length/totalWidth)*100+"%"
-        if bar.active == true
-          barStyle.backgroundColor = "#bbb"
-          barStyle.color = "white"
-        <div onMouseMove={@handleBarMove(bar)} 
-              style={barStyle} 
-              ref={bar.name}
-              className={"bar"+(if bar.name == @recorder.location.branch then " active" else "")}>
-                {bar.name} - {bar.branch.ops.length}</div>
-      }
-    </div>
-
-      <div className={"controls "+(if @recorder.playing() then "playing" else "")}>
-        <div onClick={@recorder.togglePlay}><a className="controls-play" href="#"></a></div>
-
-        <div  onMouseMove={@handleMouseMove} ref="timeline" className="playback-line">
-          <span style={{left: @currentOffsetIndicatorPosition()+"px"}} className="playback-location" />
-          
+        <div className={"controls "+(if @recorder.playing() then "playing" else "")}>
+          <div onClick={@recorder.togglePlay}><a className="controls-play" href="#"></a></div>
+          <div  onMouseMove={@handleMouseMove} ref="timeline" className="playback-line">
+            <span style={{left: Math.min(100, ((location.preOffset + location.offset) / (marker.preOffset + marker.offset) * 100))+"%"}} className="playbackLocation" />
+          </div>
         </div>
       </div>
-      
-      <textarea className="editor-2" ref="editor" />
-      <ul id="shortcut-history">
+      <textarea onKeyUp={@handleKeyUp} ref="editor" />
+      <ul id="shortcut-history" className="hidden" >
         {@recorder.shortcutHistory().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
         <li key="playback">
-          Loc: {@recorder.location().offset}
+          location:<br/>
+          {location.branch}, {location.offset}
           <br/>
-          PlayPos:{@currentOffsetIndicatorPosition()}
           <br/>
-          HistoryCount:{@recorder.branch().ops.length}
+          marker:<br/>
+          {marker.branch}, {marker.offset}
         </li>
         
       </ul>

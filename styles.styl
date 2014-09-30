@@ -6,7 +6,10 @@ body.updating-cm .CodeMirror
   display: none
 .CodeMirror
   text-align left
-
+.activeAreaOfBar
+  background: rgba(0,0,0,0.1)
+  display: inline-block
+  height 100%
 #shortcut-history
   text-align left
   position absolute
@@ -16,7 +19,7 @@ body.updating-cm .CodeMirror
   left 560px
   float left
   vertical-align top
-  font-size 16px
+  font-size 12px
   width 130px
   height 46px
   opacity 0.5
@@ -31,10 +34,25 @@ body.updating-cm .CodeMirror
     text-align left
     font-size 10px
     line-height 20px
-    padding 2px 5px
     box-sizing border-box
+    overflow hidden
+    position relative
     &.active
+      background-color #bbb
       border-left 4px solid #aaa
+    .playbackLocation
+      width 2px
+  .targetIndicator
+    width 10px
+    background-color #9c3000
+    height 10px
+    position absolute
+    top 5px
+    display inline-block
+    border-radius 5px
+    margin-left -5px
+    z-index 1
+
 #codecap
   margin 30px auto 30px 0
   max-width 550px
@@ -54,7 +72,7 @@ body.updating-cm .CodeMirror
   position relative
   margin-left 29px
 
-.playback-location
+.playbackLocation
   height 100%
   width 4px
   position absolute
@@ -108,3 +126,5 @@ body.updating-cm .CodeMirror
       content " "
       border none
 
+.hidden
+  display none !important
