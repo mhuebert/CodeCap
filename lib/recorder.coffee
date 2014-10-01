@@ -1,20 +1,18 @@
 CodeMirror = require("codemirror")
 _ = require("underscore")
 
-
-
 Recorder = (options={}) ->
   _locked = false
   _editor = {}
   _timer = IntervalTimer()
   _speed = 2.5
   _playing = false
+  _root = Date.now().toString()
   _onChange = ->
   _location = _marker =
     offset: 0
-    branch: "root"
+    branch: _root
   _shortcutHistory = []
-  _movingToMarker = false
 
   api = {}
   
@@ -24,7 +22,7 @@ Recorder = (options={}) ->
   api.togglePlay = -> 
     _playing = !_playing; 
     if _playing
-      api.goToLocation {branch: "root", offset: 0}, true
+      navigate {branch: _root, offset: 0}
     play()
 
   api.speed = ->            _speed
@@ -38,6 +36,8 @@ Recorder = (options={}) ->
     marker = _(_marker).clone()
     marker.preOffset = history[_marker.branch].preOffset
     marker
+  api.goToMarker = -> api.goToLocation(_marker)
+
   api.shortcutHistory = -> _shortcutHistory.slice()
 
   if !options.history
@@ -48,6 +48,8 @@ Recorder = (options={}) ->
       offset: 0
       preOffset: 0
       ancestors: []
+      children: []
+      annotations: []
   
   api.initialize = (options) ->
     _editor = api.editor = options.editor
@@ -58,9 +60,10 @@ Recorder = (options={}) ->
     _editor.on 'cursorActivity', editorEvent("cursor")
     _editor.on 'keyHandled', editorEvent("key")
     _editor.on 'beforeChange', (cm, change) -> 
-      if !branchesEqual(_location, _marker) and _movingToMarker == false
+      if !locationsEqual(_location, _marker) and _playing == false and _locked == false
         change.cancel()
-  branchesEqual = (b1, b2) ->
+
+  locationsEqual = (b1, b2) ->
     b1.branch == b2.branch and Math.round(b1.offset) == Math.round(b2.offset)
   api.branch = (name=null) ->
     if !name
@@ -81,10 +84,12 @@ Recorder = (options={}) ->
         branchName = Date.now().toString()
         newBranch =
           name: branchName
+          children: []
           ops: []
           ancestors: api.branch().ancestors.concat([_location.branch]) 
           offset: _location.offset
           preOffset: api.branch().preOffset + _location.offset
+          annotations: []
         
         history[branchName] = newBranch
         _location = 
@@ -114,8 +119,8 @@ Recorder = (options={}) ->
     if i1 == i2
       [branch, i1, i2]  = pathBetweenLocations(history, _location, _marker)[1]
 
-    api.goToLocation { branch: branch, offset: i1+1 }, true
-    setTimeout play, 100
+    navigate { branch: branch, offset: i1+1 }
+    setTimeout play, 30
     false
 
   api.goToMarkerPercentOffset = (percentOffset) ->
@@ -134,32 +139,54 @@ Recorder = (options={}) ->
         break
     api.goToLocation(target)
 
+  api.annotate = ->
+    history[_location.branch].annotations.push({className: "annotation", loc: _(_location).clone()})
+    _onChange()
+    false
+
   api.setMarkerHere = ->
     _marker = 
       branch: _location.branch
       offset: Math.round(_location.offset)
     _editor.focus()
+    _onChange()
+    false
 
-  api.goToLocation = (destination, force=false) ->
+  navigate = (destination) ->
     return if !destination.branch?
-    return if _playing == true and force == false
     operations = opsBetweenLocations(history, _location, destination)
     if operations.length > 0
-      _movingToMarker = true if branchesEqual(_marker, destination)
       _locked = true
       _editor.operation ->
         for changes in operations
           applyChanges(_editor, changes)
       _locked = false
-      _movingToMarker = false
+    _onChange()
     _location = destination
 
+  api.goToLocation = (destination) ->
+    return if _playing == true # or !locationsEqual(_marker, destination)
+    navigate(destination)
+    
   api.branches = ->
     bars = []
     width = 0
     currentBranch = history[_location.branch]
     ancestors = currentBranch.ancestors.concat(_location.branch)
+
+    # childIndex = indexByChildren(history)
+    # sortedBranches = []
+    # addSortedBranch = (branch) ->
+    #   sortedBranches.push(branch)
+    #   children = (childIndex[branch.name] || []).map (n) -> history[n]
+    #   children = _(children).sortBy (child) -> -parseInt(child.name)
+    #   for child in children
+    #     addSortedBranch(child)
+    # addSortedBranch(history[_root])
+
     for name, branch of history
+      # for branch in sortedBranches
+      #   name = branch.name
       totalWidth = branch.preOffset + branch.ops.length
       activeWidth = switch
         when name == _location.branch
@@ -168,17 +195,22 @@ Recorder = (options={}) ->
           offset = history[ancestors[ancestors.indexOf(name)+1]].offset
           offset / branch.ops.length * 100
       active = name in api.branch().ancestors or name == _location.branch
-      annotations = []
+      indicators = []
+      for annotation in branch.annotations
+        annotation.styles = 
+          left: (annotation.loc.offset / branch.ops.length)*100+"%"
+        indicators.push(annotation)
+
       if _marker.branch == name
-        annotations.push
-          className: "targetIndicator"
+        indicators.push
+          className: "targetIndicator "+(if Math.round(_marker.offset) == Math.round(branch.ops.length) then "action-append" else "action-branch")
           styles: {left: (_marker.offset / branch.ops.length)*100+"%"}
       if _location.branch == name
-        annotations.push
+        indicators.push
           className: "playbackLocation"
           styles: {left:(_location.offset / branch.ops.length)*100+"%"}
       if activeWidth > 0
-        annotations.push
+        indicators.push
           className: "activeAreaOfBar"
           styles: {width: activeWidth+"%"}
       bar = 
@@ -187,11 +219,11 @@ Recorder = (options={}) ->
         totalWidth: totalWidth
         activeWidth: activeWidth || 0
         active: active
-        annotations: annotations
+        indicators: indicators
       bars.push bar
       width = totalWidth if totalWidth > width
-    # bars = _(bars).sortBy((bar) -> bar.branch.ancestors.slice(-1)[0])
-    bars = _(bars).sortBy(-name)
+    # New updates always appear at bottom
+    bars = _(bars).sortBy (bar) -> parseInt(bar.name)
     totalWidth: width
     bars: bars
   api
@@ -225,12 +257,6 @@ applyChanges = (editor, changes) ->
         editor.setCursor change.cursor
       when "selections"
         editor.setSelections change.selections
-
-changeTimeout = (changes=[{}]) ->
-  switch changes[0].type
-    when "key-combo" then 0
-    else 100
-
 
 changeHandlers =
   key: (cm, name, event) ->
@@ -290,7 +316,7 @@ pathBetweenLocations = (history, loc1, loc2, path=[]) ->
     return pathBetweenLocations(history, {branch: nextBranch.name, offset: 0}, loc2, path)
 
   # b2 is an ancestor of b1, or a descendant of an ancestor of b1. move up the ancestor chain.
-  nextBranch = history[b1.ancestors.slice(-1)[0]]
+  nextBranch = history[b1.ancestors[b1.ancestors.length-1]]
   path.push [b1.name, loc1.offset,0]
   return pathBetweenLocations(history, {branch: nextBranch.name, offset: b1.offset}, loc2, path)
 
@@ -302,5 +328,13 @@ opsBetweenLocations = (history, loc1, loc2) ->
     [branchName, i1, i2] = p
     operations = operations.concat opsFromList(history[branchName].ops, i1, i2)
   operations
+
+indexByChildren = (history) ->
+  index = {}
+  for name, branch of history
+    if parent = branch.ancestors[branch.ancestors.length-1]
+      index[parent] = index[parent] || []
+      index[parent].push(name)
+  index
 
 module.exports = Recorder

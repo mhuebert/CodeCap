@@ -35,26 +35,44 @@ body.updating-cm .CodeMirror
     font-size 10px
     line-height 20px
     box-sizing border-box
-    overflow hidden
+    // overflow hidden
     position relative
     &.active
       background-color #bbb
       border-left 4px solid #aaa
     .playbackLocation
       width 2px
-  .targetIndicator
+  .targetIndicator, .annotation
     width 10px
-    background-color #9c3000
     height 10px
     position absolute
     top 5px
     display inline-block
-    border-radius 5px
-    margin-left -5px
+    // border-radius 5px
     z-index 1
+    overflow hidden
+    box-sizing border-box
+    border-radius 5px
+    background-color #9c3000
+    transform rotate(-45deg)
+  .targetIndicator
+    &.action-append
+      margin-left 5px
+    &.action-branch
+      margin-left -5px
+      // width 0
+      // height 0
+      // border-right 6px solid transparent
+      // border-top 9px solid #9c3000
+      // border-left 6px solid transparent
+
+  .annotation
+    border 3px solid #fff
+    box-shadow 0 0 5px rgba(0,0,0,0.2)
+    background #bbb
 
 #codecap
-  margin 30px auto 30px 0
+  margin 30px auto 30px auto
   max-width 550px
   position relative
 
