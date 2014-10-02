@@ -84,6 +84,14 @@ module.exports = React.createClass
         @annotationMenu(annotation, "annotation-#{reactionReference}-"+annotation.time)()
       , 20
       e.preventDefault()
+  saveJSON: (e) ->
+    uriContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(@state.recorder.history()))
+    e.target.href = uriContent
+  loadJSON: (e) ->
+    reader = new FileReader()
+    reader.onload = (e) ->
+      text = reader.result
+    reader.readAsText(file, encoding)
   render: ->
     
     {bars, totalWidth, annotations} = @state.recorder.branches()
@@ -157,6 +165,9 @@ module.exports = React.createClass
               <input  ref="annotateTitle" 
                       placeholder="Title"
                       onChange={@handleAnnotationTitleChange} value={@state.annotation.title || ""}/></div>
+        <a download="history.json" style={marginTop: 10, display: "block"} onClick={@saveJSON} href="#">&darr;</a>
+        <a className="hidden"  href="#" onClick={@loadJSON}>&uarr;</a>
+        <input type="file" className="hidden" ref="upload" />
         </div>
 editorSettings = 
   mode: "clojure"

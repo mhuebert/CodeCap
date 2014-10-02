@@ -185,7 +185,7 @@ Recorder = (options={}) ->
         target.offset = targetOffset - ancestor.preOffset
         break
     api.goToLocation(target)
-
+  api.history = -> history
   api.snapshot = (e) ->
     if !(_(history[_location.branch].annotations).find (note) -> api.locationsEqual(note.loc, _location))
       annotation = 
@@ -213,6 +213,7 @@ Recorder = (options={}) ->
 
   navigate = (destination) ->
     return if !destination.branch?
+    destination.offset = Math.round(destination.offset)
     operations = opsBetweenLocations(history, _location, destination)
     if operations.length > 0
       _locked = true
