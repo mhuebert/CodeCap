@@ -32,55 +32,57 @@ module.exports = React.createClass
         @recorder.goToLocation 
           branch: bar.name
           offset: zeroIndexedFrame
+
   render: ->
-    {bars, totalWidth} = @recorder.branches()
+    {bars, totalWidth, annotations} = @recorder.branches()
     marker = @recorder.marker()
     location = @recorder.location()
+    bars = []
 
     @transferPropsTo <div id="codecap">
-    <div className="codecap-header"  onMouseLeave={@recorder.goToMarker} onMouseEnter={@handleMouseEnter}>
-      <div className="branch-timeline">
-        {bars.map (bar) =>
-          barStyle =
-            marginLeft: (bar.branch.preOffset/totalWidth)*100+"%"
-            width: (bar.branch.ops.length/totalWidth)*100+"%"
-          <div onMouseMove={@handleBarMove(bar)} 
-               onClick={@recorder.setMarkerHere}
-               onContextMenu={@recorder.annotate}
-               style={barStyle} 
-               ref={bar.name}
-               key={bar.name}
-               className="bar">
-                {
-                  bar.indicators.map (indicator, index) ->
-                    <span key={indicator.className+index} className={indicator.className} style={indicator.styles} />
-                }
-          </div>
-        }
-      </div>
+      <div className="codecap-header"  onMouseLeave={@recorder.goToMarker} onMouseEnter={@handleMouseEnter}>
+        <div className="branch-timeline">
+          {bars.map (bar) =>
+            minWidth = Math.max(0.03, bar.annotations.length*0.02)
+            barStyle =
+              marginLeft: (bar.branch.preOffset/totalWidth)*100+"%"
+              width: Math.max(minWidth, (bar.branch.ops.length/totalWidth))*100+"%"
+            <div onMouseMove={@handleBarMove(bar)} 
+                 onClick={@recorder.setMarkerHere}
+                 onContextMenu={@recorder.snapshot}
+                 style={barStyle} 
+                 ref={bar.name}
+                 key={bar.name}
+                 className="bar">
+                  {
+                    bar.annotations.concat(bar.indicators).map (indicator, index) ->
+                      <span key={indicator.className+index} className={indicator.className} style={indicator.styles} />
+                  }
+            </div>
+          }
+        </div>
 
-        <div className={"controls "+(if @recorder.playing() then "playing" else "")}>
-          <div onClick={@recorder.togglePlay}><a className="controls-play" href="#"></a></div>
-          <div onClick={@recorder.setMarkerHere} onMouseMove={@handleMouseMove} ref="timeline" className=" playback-line">
-            <span style={{left: Math.min(100, ((location.preOffset + location.offset) / (marker.preOffset + marker.offset) * 100))+"%"}} className="playbackLocation" />
+          <div className={"controls "+(if @recorder.playing() then "playing" else "")}>
+            <div onClick={@recorder.togglePlay}><a className="controls-play" href="#"></a></div>
+            <div onClick={@recorder.setMarkerHere} onMouseMove={@handleMouseMove} ref="timeline" className=" playback-line">
+              <span style={{left: Math.min(100, ((location.preOffset + location.offset) / (marker.preOffset + marker.offset) * 100))+"%"}} className="playbackLocation" />
+            </div>
           </div>
         </div>
-      </div>
-      <textarea onKeyUp={@handleKeyUp} ref="editor" />
-      <ul id="shortcut-history" className="hidden" >
-        {@recorder.shortcutHistory().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
-        <li key="playback">
-          location:<br/>
-          {location.branch}, {location.offset}
-          <br/>
-          <br/>
-          marker:<br/>
-          {marker.branch}, {marker.offset}
-        </li>
-        
-      </ul>
-            
-      </div>
+        <textarea onKeyUp={@handleKeyUp} ref="editor" />
+        <ul id="panel-right" >
+        <li><a onClick={@recorder.snapshot} className="btn" href="#">+ snapshot</a></li>
+        {
+          annotations.map (annotation) =>
+            <li><a href="#" onClick={=>@recorder.playTo(annotation.loc);false}>
+              {Math.round(annotation.loc.offset)}</a>
+            </li>
+        }
+          {@recorder.shortcutHistory().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
+          
+        </ul>
+              
+        </div>
 editorSettings = 
   mode: "clojure"
   tabSize: 2

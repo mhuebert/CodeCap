@@ -6,11 +6,15 @@ body.updating-cm .CodeMirror
   display: none
 .CodeMirror
   text-align left
+a
+  text-decoration none
+  &:hover
+    text-decoration underline
 .activeAreaOfBar
   background: rgba(0,0,0,0.1)
   display: inline-block
   height 100%
-#shortcut-history
+#panel-right
   text-align left
   position absolute
   padding 0
@@ -22,9 +26,15 @@ body.updating-cm .CodeMirror
   font-size 12px
   width 130px
   height 46px
-  opacity 0.5
   li
     list-style none
+  .btn
+    background: white
+    color: #05405a 
+    font-weight bold
+    padding 5px 8px
+    display inline-block
+    margin-bottom 10px
 .branch-timeline
   margin-bottom 10px
   .bar
@@ -43,33 +53,28 @@ body.updating-cm .CodeMirror
     .playbackLocation
       width 2px
   .targetIndicator, .annotation
-    width 10px
-    height 10px
     position absolute
-    top 5px
     display inline-block
-    // border-radius 5px
     z-index 1
     overflow hidden
     box-sizing border-box
+    margin-left -5px
     border-radius 5px
+    top 5px
+    width 10px
+    height 10px
     background-color #9c3000
-    transform rotate(-45deg)
-  .targetIndicator
-    &.action-append
-      margin-left 5px
-    &.action-branch
-      margin-left -5px
-      // width 0
-      // height 0
-      // border-right 6px solid transparent
-      // border-top 9px solid #9c3000
-      // border-left 6px solid transparent
-
   .annotation
-    border 3px solid #fff
+    background white
     box-shadow 0 0 5px rgba(0,0,0,0.2)
-    background #bbb
+    &.active::after
+      content " "
+      display block
+      width 5px
+      height 5px
+      border-radius 5px
+      background #bbb
+      margin 3px
 
 #codecap
   margin 30px auto 30px auto

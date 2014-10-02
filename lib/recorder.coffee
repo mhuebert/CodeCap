@@ -15,15 +15,8 @@ Recorder = (options={}) ->
   _shortcutHistory = []
 
   api = {}
-  
-  api.playing = ->    _playing
-  api.play = ->       _playing = true; play()
-  api.stop = ->       _playing = false
-  api.togglePlay = -> 
-    _playing = !_playing; 
-    if _playing
-      navigate {branch: _root, offset: 0}
-    play()
+
+
 
   api.speed = ->            _speed
   api.setSpeed = (speed) -> _speed = speed
@@ -107,20 +100,39 @@ Recorder = (options={}) ->
         _location.offset = _location.offset+1
       _marker = _(_location).clone()
 
-
+  api.playing = ->    _playing
+  api.play = ->       _playing = true; play()
+  api.stop = ->       _playing = false
+  api.togglePlay = -> 
+    _playing = !_playing; 
+    if _playing
+      navigate {branch: _root, offset: 0}
+    play()
   play = ->
-    [b1, o1, b2, o2] = [_location.branch, Math.round(_location.offset), _marker.branch, Math.round(_marker.offset)]
-    if (b1 == b2 and o1 >= o2) or _playing == false
-      _playing = false
-      _onChange()
-      return
+    api.playTo(_marker)
 
-    [branch, i1, i2] = pathBetweenLocations(history, _location, _marker)[0]
-    if i1 == i2
-      [branch, i1, i2]  = pathBetweenLocations(history, _location, _marker)[1]
+  api.playTo = (destination) ->
+    _playing = true
 
-    navigate { branch: branch, offset: i1+1 }
-    setTimeout play, 30
+    stepForward = =>
+      [b1, o1, b2, o2] = [_location.branch, Math.round(_location.offset), destination.branch, Math.round(destination.offset)]
+      if (b1 == b2 and o1 == o2) or _playing == false
+        _playing = false
+        _onChange()
+        return
+
+      # play backwards
+      # set time for entire play action and use that for the offset
+      [branch, i1, i2] = pathBetweenLocations(history, _location, destination)[0]
+
+      if i1 == i2
+        [branch, i1, i2]  = pathBetweenLocations(history, _location, destination)[1]
+      direction = if i1 < i2 then 1 else -1
+
+      navigate { branch: branch, offset: i1+direction }
+      setTimeout stepForward, 30
+
+    stepForward()
     false
 
   api.goToMarkerPercentOffset = (percentOffset) ->
@@ -139,9 +151,14 @@ Recorder = (options={}) ->
         break
     api.goToLocation(target)
 
-  api.annotate = ->
-    history[_location.branch].annotations.push({className: "annotation", loc: _(_location).clone()})
-    _onChange()
+  api.snapshot = ->
+    if !(_(history[_location.branch].annotations).find (note) -> locationsEqual(note.loc, _location))
+      history[_location.branch].annotations.push
+        className: "annotation"
+        loc:
+          branch: _location.branch
+          offset: Math.round(_location.offset)
+      _onChange()
     false
 
   api.setMarkerHere = ->
@@ -170,6 +187,7 @@ Recorder = (options={}) ->
     
   api.branches = ->
     bars = []
+    annotations = []
     width = 0
     currentBranch = history[_location.branch]
     ancestors = currentBranch.ancestors.concat(_location.branch)
@@ -196,10 +214,10 @@ Recorder = (options={}) ->
           offset / branch.ops.length * 100
       active = name in api.branch().ancestors or name == _location.branch
       indicators = []
+      annotations = annotations.concat branch.annotations
       for annotation in branch.annotations
         annotation.styles = 
           left: (annotation.loc.offset / branch.ops.length)*100+"%"
-        indicators.push(annotation)
 
       if _marker.branch == name
         indicators.push
@@ -220,12 +238,18 @@ Recorder = (options={}) ->
         activeWidth: activeWidth || 0
         active: active
         indicators: indicators
+        annotations: branch.annotations
       bars.push bar
       width = totalWidth if totalWidth > width
     # New updates always appear at bottom
     bars = _(bars).sortBy (bar) -> parseInt(bar.name)
+
     totalWidth: width
     bars: bars
+    annotations: _(annotations).chain()
+                    .sortBy((note) -> parseFloat note.loc.offset)
+                    .sortBy((note)->parseInt(note.loc.branch))
+                    .value()
   api
 
 
