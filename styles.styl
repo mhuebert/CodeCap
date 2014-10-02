@@ -14,18 +14,51 @@ a
   background: rgba(0,0,0,0.1)
   display: inline-block
   height 100%
+.context-menu
+  font-family "Helvetica Neue", helvetica, arial, sans-serif
+  font-size 13px
+  text-align left
+  position absolute
+  background white
+  padding 10px
+  box-shadow 0 0 5px rgba(0,0,0,0.2)
+  width 150px
+  margin-left -85px
+  z-index 2
+  margin-top 10px
+  box-sizing borderpbox
+  border-radius 4px
+  input
+    width 100%
+    border 1px solid #ddd
+    padding 5px 7px
+    &:focus
+      outline 0
+      border 1px solid #ccc
+  &::after
+    content " "
+    width 0
+    height 0
+    position absolute
+    left 50%
+    margin-left -8px
+    top -8px
+    border-left 8px solid transparent
+    border-right 8px solid transparent
+    border-bottom 8px solid rgba(0 0 0 0.3)
 #panel-right
   text-align left
   position absolute
   padding 0
   margin 0
-  top 40px
+  top 0
   left 560px
   float left
   vertical-align top
   font-size 12px
   width 130px
   height 46px
+  font-family "Helvetica Neue"
   li
     list-style none
   .btn
@@ -77,11 +110,9 @@ a
       margin 3px
 
 #codecap
-  margin 30px auto 30px auto
+  margin 20px auto
   max-width 550px
   position relative
-
-  // #codecap-source
 .CodeMirror
   // height 150px
   height auto
@@ -148,6 +179,35 @@ a
       margin-top -5px
       content " "
       border none
+.annotation
+  margin-bottom 5px
+  a
+    color #333
+  a.edit
+    display none
+    margin-left 3px
+    color #aaa
+    font-size 11px
+    cursor pointer
+  &:hover
+    .edit
+      display inline
+.branch-toggle
+  text-align left
+  font-size 12px
+  color #aaa
+  width 20px
+  height 20px
+  display inline-block
+  &:hover span
+    border-color #aaa
+  span
+    display block
+    margin 0 0 3px 0
+    border-bottom 3px solid #ccc
+.codemirror-wrap
+  background white
+  padding 10px
 
 .hidden
   display none !important

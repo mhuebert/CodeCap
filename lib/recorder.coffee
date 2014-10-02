@@ -16,8 +16,13 @@ Recorder = (options={}) ->
 
   api = {}
 
-
-
+  api.beginning = ->
+    branch: _root
+    offset: 0
+  api.ending = ->
+    finalBranch = _(history).chain().values().sortBy((branch)->-parseInt(branch.name)).value()[0]
+    branch: finalBranch.name
+    offset: finalBranch.ops.length
   api.speed = ->            _speed
   api.setSpeed = (speed) -> _speed = speed
 
@@ -53,10 +58,10 @@ Recorder = (options={}) ->
     _editor.on 'cursorActivity', editorEvent("cursor")
     _editor.on 'keyHandled', editorEvent("key")
     _editor.on 'beforeChange', (cm, change) -> 
-      if !locationsEqual(_location, _marker) and _playing == false and _locked == false
+      if !api.locationsEqual(_location, _marker) and _playing == false and _locked == false
         change.cancel()
 
-  locationsEqual = (b1, b2) ->
+  api.locationsEqual = (b1, b2) ->
     b1.branch == b2.branch and Math.round(b1.offset) == Math.round(b2.offset)
   api.branch = (name=null) ->
     if !name
@@ -101,46 +106,76 @@ Recorder = (options={}) ->
       _marker = _(_location).clone()
 
   api.playing = ->    _playing
-  api.play = ->       _playing = true; play()
+  api.play = ->       play()
   api.stop = ->       _playing = false
   api.togglePlay = -> 
-    _playing = !_playing; 
     if _playing
-      navigate {branch: _root, offset: 0}
+      _playing = false
+      return
+    navigate {branch: _root, offset: 0}
     play()
+
   play = ->
     api.playTo(_marker)
-
-  api.playTo = (destination) ->
+  api.playTo = ->
+    # _playing = true
+    playTo.apply(this, arguments)
+  playTo = (destination, options={transition:1}) ->
+    return if _playing == true
     _playing = true
+    _marker = destination
+    startTime = Date.now()
+    totalPath = pathBetweenLocations(history, _location, destination)
+    totalOperations = _(totalPath).reduce (sum, segment) ->
+      sum + Math.abs(segment[1] - segment[2])
+    , 0
 
+    lastTime = Date.now()
     stepForward = =>
+      lastTime  = Date.now()
+
+      ##Speed past frames
+      delta = Date.now() - startTime
+      percent = Math.min delta/(options.transition * 1000), 1
+      targetOperation = Math.round(percent * totalOperations)
+      count = 0
+      for segment in totalPath
+        segmentOps = Math.round Math.abs(segment[1] - segment[2])
+        direction = if segment[1] < segment[2] then 1 else -1
+        if targetOperation <= count + segmentOps
+          target =
+            branch: segment[0]
+            offset: Math.round(segment[1] + direction * (targetOperation - count))
+          break
+        count += segmentOps
+
       [b1, o1, b2, o2] = [_location.branch, Math.round(_location.offset), destination.branch, Math.round(destination.offset)]
       if (b1 == b2 and o1 == o2) or _playing == false
         _playing = false
         _onChange()
         return
 
-      # play backwards
-      # set time for entire play action and use that for the offset
       [branch, i1, i2] = pathBetweenLocations(history, _location, destination)[0]
 
       if i1 == i2
         [branch, i1, i2]  = pathBetweenLocations(history, _location, destination)[1]
       direction = if i1 < i2 then 1 else -1
 
-      navigate { branch: branch, offset: i1+direction }
-      setTimeout stepForward, 30
+      # navigate { branch: branch, offset: i1+direction }
+      navigate target
+      # setTimeout stepForward, 16
+      # stepForward()
+      requestAnimationFrame(stepForward)
 
     stepForward()
     false
 
-  api.goToMarkerPercentOffset = (percentOffset) ->
-    markerBranch = history[_marker.branch]
-    absoluteOffset = markerBranch.preOffset + _marker.offset
+  api.goToPercentOffset = (destination, percentOffset) ->
+    destinationBranch = history[destination.branch]
+    absoluteOffset = destinationBranch.preOffset + destination.offset
     targetOffset = percentOffset * absoluteOffset
     target = {}
-    ancestorChain = markerBranch.ancestors.concat [markerBranch.name]
+    ancestorChain = destinationBranch.ancestors.concat [destinationBranch.name]
     for ancestorName, index in ancestorChain
 
       [ancestor, nextAncestor] = [history[ancestorName], history[ancestorChain[index+1]]]
@@ -151,16 +186,23 @@ Recorder = (options={}) ->
         break
     api.goToLocation(target)
 
-  api.snapshot = ->
-    if !(_(history[_location.branch].annotations).find (note) -> locationsEqual(note.loc, _location))
-      history[_location.branch].annotations.push
+  api.snapshot = (e) ->
+    if !(_(history[_location.branch].annotations).find (note) -> api.locationsEqual(note.loc, _location))
+      annotation = 
         className: "annotation"
         loc:
           branch: _location.branch
           offset: Math.round(_location.offset)
+        time: Date.now()
+      history[_location.branch].annotations.push annotation
       _onChange()
-    false
-
+    _editor.focus()
+    e?.preventDefault()
+    annotation
+  api.updateAnnotation = (annotation) ->
+    original = _(history[annotation.loc.branch].annotations).find (a) -> a.time == annotation.time
+    original.title = annotation.title
+    _onChange()
   api.setMarkerHere = ->
     _marker = 
       branch: _location.branch
@@ -182,7 +224,7 @@ Recorder = (options={}) ->
     _location = destination
 
   api.goToLocation = (destination) ->
-    return if _playing == true # or !locationsEqual(_marker, destination)
+    return if _playing == true # or !api.locationsEqual(_marker, destination)
     navigate(destination)
     
   api.branches = ->
