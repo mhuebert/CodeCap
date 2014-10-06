@@ -151,7 +151,7 @@ module.exports = React.createClass
               ref = "annotation-panel-"+annotation.time
 
               <li className="annotation">
-              <a href="#" ref={ref} onContextMenu={@annotationMenu(annotation, ref)} onClick={=>@state.recorder.playTo(annotation.loc, {transition: 0.1});false}>
+              <a href="#" ref={ref} onContextMenu={@annotationMenu(annotation, ref)} onClick={=>@state.recorder.playTo(annotation.loc, {transition: 1});false}>
                 {annotation.title || formatTime(annotation.time)} </a> 
               </li>
           }

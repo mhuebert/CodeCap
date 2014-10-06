@@ -129,43 +129,57 @@ Recorder = (options={}) ->
     totalOperations = _(totalPath).reduce (sum, segment) ->
       sum + Math.abs(segment[1] - segment[2])
     , 0
-
-    lastTime = Date.now()
     stepForward = =>
-      lastTime  = Date.now()
 
-      ##Speed past frames
+      # Find the target operation based on transition time
       delta = Date.now() - startTime
       percent = Math.min delta/(options.transition * 1000), 1
       targetOperation = Math.round(percent * totalOperations)
-      count = 0
-      for segment in totalPath
-        segmentOps = Math.round Math.abs(segment[1] - segment[2])
-        direction = if segment[1] < segment[2] then 1 else -1
-        if targetOperation <= count + segmentOps
-          target =
-            branch: segment[0]
-            offset: Math.round(segment[1] + direction * (targetOperation - count))
-          break
-        count += segmentOps
 
-      [b1, o1, b2, o2] = [_location.branch, Math.round(_location.offset), destination.branch, Math.round(destination.offset)]
-      if (b1 == b2 and o1 == o2) or _playing == false
+      # Step through totalPath to find the target operation
+      operationCount = 0
+      for segment, segI in totalPath
+
+        # console.log "segI #{segI}"
+        nextSegment = totalPath[segI+1]
+        
+        # how many operations in this segment?
+        segmentOperationCount = Math.round Math.abs(segment[1] - segment[2])
+        
+        # are we moving forwards or backwards?
+        direction = if segment[1] < segment[2] then 1 else -1
+
+        # is the target is in this segment?
+        if targetOperation <= operationCount + segmentOperationCount
+          if targetOperation == totalOperations and nextSegment and 0 == nextSegment[1] - nextSegment[2] 
+            target =
+              branch: nextSegment[0]
+              offset: nextSegment[1]
+          else
+            target =
+              branch: segment[0]
+              offset: Math.round(segment[1] + (direction * (targetOperation - operationCount)))
+          break
+
+        # increment the operationcount
+        operationCount += segmentOperationCount
+
+      # we have our next operation
+      if _playing == false or api.locationsEqual(_location, destination)
         _playing = false
         _onChange()
         return
 
-      [branch, i1, i2] = pathBetweenLocations(history, _location, destination)[0]
-
-      if i1 == i2
-        [branch, i1, i2]  = pathBetweenLocations(history, _location, destination)[1]
-      direction = if i1 < i2 then 1 else -1
-
-      # navigate { branch: branch, offset: i1+direction }
       navigate target
+      requestAnimationFrame(stepForward)
+
+      # [branch, i1, i2] = pathBetweenLocations(history, _location, destination)[0]
+      # if i1 == i2 #
+      #   [branch, i1, i2]  = pathBetweenLocations(history, _location, destination)[1]
+      # direction = if i1 < i2 then 1 else -1
+      # navigate { branch: branch, offset: i1+direction }
       # setTimeout stepForward, 16
       # stepForward()
-      requestAnimationFrame(stepForward)
 
     stepForward()
     false
