@@ -141,8 +141,7 @@ Recorder = (options={}) ->
     , 0
     stepForward = =>
       
-      
-      transition = Math.min(4, Math.max(options.transition, (totalOperations / 50)))
+      transition = Math.min(4, Math.max(options.transition, (totalOperations / 30)))
 
 
       # Find the target operation based on transition time

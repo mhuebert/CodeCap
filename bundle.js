@@ -65,7 +65,7 @@
 /******/ 	}
 /******/ 	
 /******/ 	var hotApplyOnUpdate = true;
-/******/ 	var hotCurrentHash = "cce5940902a1bca5abb6"; // eslint-disable-line no-unused-vars
+/******/ 	var hotCurrentHash = "f294e6488963f7458aa3"; // eslint-disable-line no-unused-vars
 /******/ 	var hotCurrentModuleData = {};
 /******/ 	var hotCurrentParents = []; // eslint-disable-line no-unused-vars
 /******/ 	
@@ -37242,7 +37242,7 @@
 	    stepForward = (function(_this) {
 	      return function() {
 	        var delta, direction, nextSegment, operationCount, percent, segI, segment, segmentOperationCount, target, targetOperation, transition, _i, _len;
-	        transition = Math.min(4, Math.max(options.transition, totalOperations / 50));
+	        transition = Math.min(4, Math.max(options.transition, totalOperations / 30));
 	        delta = Date.now() - startTime;
 	        percent = Math.min(delta / (transition * 1000), 1);
 	        targetOperation = Math.round(percent * totalOperations);
