@@ -46,12 +46,13 @@ a
     border-left 8px solid transparent
     border-right 8px solid transparent
     border-bottom 8px solid rgba(0 0 0 0.3)
+    
 #panel-right
   text-align left
   position absolute
   padding 0
   margin 0
-  top 0
+  // top 0
   left 560px
   float left
   vertical-align top
@@ -59,15 +60,54 @@ a
   width 130px
   height 46px
   font-family "Helvetica Neue"
+  a 
+    color black
+  a.annotation
+    color black
+    display block 
+    padding 8px
+    border-top 1px solid rgba(0,0,0,0.05)
+    &:hover
+      background rgba(0,0,0,0.05)
+      text-decoration none
   li
     list-style none
-  .btn
-    background: white
-    color: #05405a 
-    font-weight bold
-    padding 5px 8px
-    display inline-block
-    margin-bottom 10px
+    
+    
+.btn
+  vertical-align top
+  
+  font-family "Helvetica Neue", helvetica, arial, sans-serif
+  background: white
+  // color: #05405a 
+  font-weight bold
+  padding 0 8px
+  display block
+  margin-bottom 10px
+  height 29px 
+  line-height 29px
+  font-size 13px
+  input
+    cursor pointer
+    
+  &:hover
+    text-decoration underline
+.btn-dark    
+  opacity 0.5
+  display inline-block
+  text-align center
+  border 1px solid rgba(0,0,0,0.1)
+  font-size 12px
+  padding 0
+  &:hover
+    opacity 1
+.width-33
+  width 33.3%
+  box-sizing border-box
+.width-50
+  width 50%
+  box-sizing border-box
+      
 .branch-timeline
   margin-bottom 10px
   .bar
@@ -89,7 +129,7 @@ a
     position absolute
     display inline-block
     z-index 1
-    overflow hidden
+    // overflow hidden
     box-sizing border-box
     margin-left -5px
     border-radius 5px
@@ -100,15 +140,14 @@ a
   .annotation
     background white
     box-shadow 0 0 5px rgba(0,0,0,0.2)
-    &.active::after
-      content " "
-      display block
-      width 5px
-      height 5px
-      border-radius 5px
-      background #bbb
-      margin 3px
-
+    border 3px solid white
+.bar
+  .annotation 
+    cursor pointer
+  .annotation:hover, .annotation.hovering
+    background #ddd
+  .annotation.active
+    background #9c3000
 #codecap
   margin 20px auto
   max-width 550px
@@ -124,7 +163,7 @@ a
   background #ddd
   height 100%
   position relative
-  margin-left 29px
+  //margin-left 29px
 
 .playbackLocation
   height 100%
@@ -180,7 +219,6 @@ a
       content " "
       border none
 .annotation
-  margin-bottom 5px
   a
     color #333
   a.edit

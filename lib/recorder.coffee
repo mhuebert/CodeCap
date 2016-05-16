@@ -1,19 +1,27 @@
 CodeMirror = require("codemirror")
 _ = require("underscore")
 
+earliestBranch = (history) ->
+  console.log history, parseInt(_(history).chain().keys().sort().reverse().value())
+  parseInt(_(history).chain().keys().sort().value())
+
+cleanHistory = (history) ->
+  for name, branch of history
+    history[name].ops = _(branch.ops).map (ops) -> _(ops).filter (op) -> op.type != "cursor" and op.type != "selections"
+  history  
+
 Recorder = (options={}) ->
   _locked = false
   _editor = {}
   _timer = IntervalTimer()
   _speed = 2.5
   _playing = false
-  _root = Date.now().toString()
-  _onChange = ->
+  _root = if options.history then earliestBranch(options.history) else Date.now().toString()
+  _triggerRender = ->
   _location = _marker =
     offset: 0
     branch: _root
   _shortcutHistory = []
-
   api = {}
 
   api.beginning = ->
@@ -48,13 +56,15 @@ Recorder = (options={}) ->
       ancestors: []
       children: []
       annotations: []
+  else
+    history = options.history #cleanHistory(options.history)
   
   api.initialize = (options) ->
     _editor = api.editor = options.editor
-    _onChange = options.onChange
+    _triggerRender = options.triggerRender
     _editor.on 'change', editorEvent("change")
-    if options.onChange
-      _editor.on 'change', options.onChange
+    if _triggerRender
+      _editor.on 'change', -> _triggerRender()
     _editor.on 'cursorActivity', editorEvent("cursor")
     _editor.on 'keyHandled', editorEvent("key")
     _editor.on 'beforeChange', (cm, change) -> 
@@ -130,10 +140,14 @@ Recorder = (options={}) ->
       sum + Math.abs(segment[1] - segment[2])
     , 0
     stepForward = =>
+      
+      
+      transition = Math.min(4, Math.max(options.transition, (totalOperations / 50)))
+
 
       # Find the target operation based on transition time
       delta = Date.now() - startTime
-      percent = Math.min delta/(options.transition * 1000), 1
+      percent = Math.min delta/(transition * 1000), 1
       targetOperation = Math.round(percent * totalOperations)
 
       # Step through totalPath to find the target operation
@@ -167,7 +181,7 @@ Recorder = (options={}) ->
       # we have our next operation
       if _playing == false or api.locationsEqual(_location, destination)
         _playing = false
-        _onChange()
+        _triggerRender()
         return
 
       navigate target
@@ -200,42 +214,45 @@ Recorder = (options={}) ->
         break
     api.goToLocation(target)
   api.history = -> history
-  api.snapshot = (e) ->
+  api.annotate = (callback=->) ->
     if !(_(history[_location.branch].annotations).find (note) -> api.locationsEqual(note.loc, _location))
       annotation = 
-        className: "annotation"
         loc:
           branch: _location.branch
           offset: Math.round(_location.offset)
         time: Date.now()
       history[_location.branch].annotations.push annotation
-      _onChange()
+      _triggerRender ->
+        callback(annotation)
     _editor.focus()
-    e?.preventDefault()
     annotation
   api.updateAnnotation = (annotation) ->
     original = _(history[annotation.loc.branch].annotations).find (a) -> a.time == annotation.time
     original.title = annotation.title
-    _onChange()
+    _triggerRender()
   api.setMarkerHere = ->
     _marker = 
       branch: _location.branch
       offset: Math.round(_location.offset)
     _editor.focus()
-    _onChange()
+    _triggerRender()
     false
 
   navigate = (destination) ->
     return if !destination.branch?
     destination.offset = Math.round(destination.offset)
     operations = opsBetweenLocations(history, _location, destination)
+    
+    # operations = _.filter operations, (op)->
+      
+    #   op[1]?.type != "selections" and op[0].type != "selections"
     if operations.length > 0
       _locked = true
       _editor.operation ->
         for changes in operations
           applyChanges(_editor, changes)
       _locked = false
-    _onChange()
+    _triggerRender()
     _location = destination
 
   api.goToLocation = (destination) ->
@@ -332,7 +349,7 @@ applyChanges = (editor, changes) ->
       when "text"
         editor.replaceRange change.text.join("\n"), change.from, change.to
       # when "key-combo"
-      #   api.shortcutHistory = api.shortcutHistory.concat [change.name]
+        # api.shortcutHistory = api.shortcutHistory.concat [change.name]
       when "cursor"
         editor.focus()
         editor.setCursor change.cursor

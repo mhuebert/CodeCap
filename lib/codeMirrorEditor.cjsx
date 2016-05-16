@@ -24,10 +24,27 @@ module.exports = React.createClass
     contextMenu: {visible: false}
     annotation: {}
 
-  componentDidMount: ->
+  reset: ->
+    if confirm("Are you sure? You will lose all your data...")
+      @setState(@getInitialState())
+      @reInit()  
+
+  reInit: ->
+    self = this
+
+    @state.editor.setValue("")
     @state.recorder.initialize
-      editor: CodeMirror.fromTextArea(@refs.editor.getDOMNode(), editorSettings)
-      onChange: => @setState lastRendered: Date.now()  
+      editor: @state.editor
+      triggerRender: (callback=->) ->
+        self.setState {lastRendered: Date.now()}, callback 
+
+  componentDidMount: ->
+    self = this
+    @setState editor: CodeMirror.fromTextArea(@refs.editor.getDOMNode(), editorSettings)
+    @state.recorder.initialize
+      editor: @state.editor
+      triggerRender: (callback=->) -> 
+        self.setState {lastRendered: Date.now()}, callback
 
   handleMouseMove: (e) ->
     {width, left} = this.refs.timeline.getDOMNode().getBoundingClientRect()
@@ -36,12 +53,15 @@ module.exports = React.createClass
       @state.recorder.goToPercentOffset @state.recorder.marker(), (mouseLeftOffset/width)
 
   handleBarMove: (bar) ->
+    
     (e) =>
+
       {width, left} = this.refs[bar.name].getDOMNode().getBoundingClientRect()
       mouseLeftOffset = (e.clientX - left)
       if 0 <= mouseLeftOffset <= width
         percentOffset = (mouseLeftOffset/width)
         zeroIndexedFrame =  percentOffset * (Math.max @state.recorder.branch(bar.name).ops.length, 0)
+
         @state.recorder.goToLocation 
           branch: bar.name
           offset: zeroIndexedFrame
@@ -59,15 +79,17 @@ module.exports = React.createClass
           visible: true
           left: left + width/2 - containerBox.left
           top: bottom - containerBox.top
+          type: "annotation"
         annotation: annotation
       , =>
         @refs.annotateTitle.getDOMNode().focus()
+      e?.preventDefault()
       window.onclick = =>
         @setState
           contextMenu:
             visible: false
         window.onclick = null
-      e?.preventDefault()
+      
   handleContextMenuKeyDown: (e) ->
     if e.which == 13
       @setState {contextMenu: {visible: false}}
@@ -77,21 +99,27 @@ module.exports = React.createClass
     annotation.title = e.target.value
     @state.recorder.updateAnnotation annotation
     @setState annotation: annotation
-  annotate: (reactionReference) -> 
+  annotate: (uiLocation) -> 
     (e) =>
-      annotation = @state.recorder.snapshot()
-      setTimeout =>
-        @annotationMenu(annotation, "annotation-#{reactionReference}-"+annotation.time)()
-      , 20
+      @state.recorder.annotate (annotation) =>
+        @annotationMenu(annotation, "annotation-#{uiLocation}-"+annotation.time)()
+        @state.recorder.setMarkerHere()
       e.preventDefault()
   saveJSON: (e) ->
     uriContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(@state.recorder.history()))
     e.target.href = uriContent
   loadJSON: (e) ->
     reader = new FileReader()
-    reader.onload = (e) ->
-      text = reader.result
-    reader.readAsText(file, encoding)
+    
+    reader.onloadend = (what) =>
+      history = JSON.parse(reader.result)
+      @setState {recorder: Recorder(history: history)}
+      @reInit()
+    
+    reader.readAsText(e.target.files[0])
+  setGlobalHover: (name) ->
+    (e) =>
+      @setState hovering: name
   render: ->
     
     {bars, totalWidth, annotations} = @state.recorder.branches()
@@ -100,7 +128,36 @@ module.exports = React.createClass
     location = @state.recorder.location()
 
     @transferPropsTo <div id="codecap">
+      <ul id="panel-right" >
+        <li><a href="#" onClick={@branchToggle} className="hidden branch-toggle">
+        <span /><span /><span />
+        </a></li>
+        <li>
+        <div className="btn btn-dark width-33" style={position: "relative", overflow: "hidden"}>
+          Open
+           <input type="file" onChange={@loadJSON} className="hiddenx" ref="upload"
+             style={position: "absolute", display: "block", background: "pink", left: 0, right: 0, top: -100, bottom: 0, opacity: 0} />
+        </div>
+        <a className="btn btn-dark width-33" download="history.json" onClick={@saveJSON} href="#">Save</a>
+        <a className="btn btn-dark width-33" onClick={@reset} href="#">Clear</a>
+        </li>
+        <span style={display: "block", boxShadow: "0 0 5px rgba(0,0,0,0.2)"} >  
+        <li>
+        
+        <a onClick={@annotate("panel")} style={marginBottom: 0} className="btn" href="#">+ Snapshot</a></li>
 
+        {
+          annotations.map (annotation) =>
+            <li >
+              <Annotation ref={"annotation-panel-"+annotation.time} 
+                          key={annotation.time}
+                          annotation={annotation}
+                          parent={this}>{annotation.title || formatTime(annotation.time)}</Annotation> 
+            </li>
+        }
+        </span>
+          {@state.recorder.shortcutHistory().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
+      </ul>
       <div className="codecap-header"  >
         <div className="branch-timeline">
           {bars.map (bar) =>
@@ -115,48 +172,35 @@ module.exports = React.createClass
                  ref={bar.name}
                  key={bar.name}
                  className="bar">
-                  
                   {
                     bar.indicators.map (indicator, index) ->
                       <a key={indicator.className+index} className={indicator.className} style={indicator.styles} />
                   }
                   {
                     bar.annotations.map (annotation, index) =>
-                      title = annotation.title || formatTime(annotation.time)
-                      ref = "annotation-timeline-"+annotation.time
-                      <a ref={ref} onContextMenu={@annotationMenu(annotation, ref)} title={title} key={annotation.className+index} className={annotation.className} style={annotation.styles} />
+                      <Annotation ref={"annotation-timeline-"+annotation.time} 
+                                  key={annotation.time} 
+                                  annotation={annotation} 
+                                  parent={this}
+                                  styles={annotation.styles} /> 
                   }
             </div>
           }
         </div>
 
           <div className={" controls "+(if @state.recorder.playing() then "playing" else "")}>
-            <div onClick={@state.recorder.togglePlay}><a className="controls-play" href="#"></a></div>
+            <div onClick={@state.recorder.togglePlay}><a className="hidden controls-play" href="#"></a></div>
             <div onClick={@state.recorder.setMarkerHere} onMouseMove={@handleMouseMove} ref="timeline" className=" playback-line">
               <span style={{left: Math.min(100, ((location.preOffset + location.offset) / (marker.preOffset + marker.offset) * 100))+"%"}} className="playbackLocation" />
             </div>
           </div>
         </div>
+        <div>
+        
         <div className="codemirror-wrap" onMouseEnter={@state.recorder.goToMarker} >
           <textarea onKeyUp={@handleKeyUp} ref="editor" />
         </div>
-        <ul id="panel-right" >
-          <li><a href="#" onClick={@branchToggle} className="branch-toggle">
-          <span /><span /><span />
-          </a></li>
-          <li><a onClick={@annotate("panel")} className="btn" href="#">+ snapshot</a></li>
-
-          {
-            annotations.map (annotation) =>
-              ref = "annotation-panel-"+annotation.time
-
-              <li className="annotation">
-              <a href="#" ref={ref} onContextMenu={@annotationMenu(annotation, ref)} onClick={=>@state.recorder.playTo(annotation.loc, {transition: 1});false}>
-                {annotation.title || formatTime(annotation.time)} </a> 
-              </li>
-          }
-            {@state.recorder.shortcutHistory().reverse().slice(0,5).map((shortcut, i)-><li key={i}>{shortcut}</li>)}
-        </ul>
+        
         <div  ref="contextMenu" 
               onKeyDown={@handleContextMenuKeyDown}
               className={cx("context-menu":true, hidden: !@state.contextMenu.visible)}
@@ -165,10 +209,32 @@ module.exports = React.createClass
               <input  ref="annotateTitle" 
                       placeholder="Title"
                       onChange={@handleAnnotationTitleChange} value={@state.annotation.title || ""}/></div>
-        <a download="history.json" style={marginTop: 10, display: "block"} onClick={@saveJSON} href="#">&darr;</a>
-        <a className="hidden"  href="#" onClick={@loadJSON}>&uarr;</a>
-        <input type="file" className="hidden" ref="upload" />
+        <div style={marginTop: 10, textAlign: "right"}>              
+        
+        
+        
+        
+        
         </div>
+        </div>
+        </div>
+
+Annotation = React.createClass
+  displayName: "annotation"
+  render: ->
+    {parent, annotation, ref, styles} = @props
+    styles = styles || {}
+    recorder = parent.state.recorder
+    <a  href="#"
+        style={styles}
+        className={cx({active: recorder.locationsEqual(recorder.marker(), annotation.loc),annotation:true, hovering: parent.state.hovering == "annotation-"+annotation.time})}
+        onMouseEnter={parent.setGlobalHover("annotation-"+annotation.time)}
+        onMouseLeave={parent.setGlobalHover(null)}
+        onContextMenu={parent.annotationMenu(annotation, ref)} 
+        onClick={=>parent.state.recorder.playTo(annotation.loc, {transition: 2});false}>
+        {@props.children}</a>
+
+
 editorSettings = 
   mode: "clojure"
   tabSize: 2
