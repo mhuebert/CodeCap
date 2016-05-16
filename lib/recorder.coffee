@@ -2,7 +2,6 @@ CodeMirror = require("codemirror")
 _ = require("underscore")
 
 earliestBranch = (history) ->
-  console.log history, parseInt(_(history).chain().keys().sort().reverse().value())
   parseInt(_(history).chain().keys().sort().value())
 
 cleanHistory = (history) ->
@@ -10,18 +9,38 @@ cleanHistory = (history) ->
     history[name].ops = _(branch.ops).map (ops) -> _(ops).filter (op) -> op.type != "cursor" and op.type != "selections"
   history  
 
+blankHistory = ->
+
+  h = {}
+  branch = Date.now().toString()
+  h[branch] = 
+    name: branch
+    ops: []
+    offset: 0
+    preOffset: 0
+    ancestors: []
+    children: []
+    annotations: []
+  h  
+
 Recorder = (options={}) ->
   _locked = false
-  _editor = {}
+  _editor = options.editor
   _timer = IntervalTimer()
   _speed = 2.5
   _playing = false
-  _root = if options.history then earliestBranch(options.history) else Date.now().toString()
-  _triggerRender = ->
-  _location = _marker =
-    offset: 0
-    branch: _root
-  _shortcutHistory = []
+  _triggerRender = options.triggerRender || ->
+  _location = _root = history = _marker = _shortcutHistory = null  
+  
+  setHistory = (h) ->
+    history = h || blankHistory()
+    _root = earliestBranch(history)
+    _location = _marker = 
+      offset: 0
+      branch: _root 
+    _shortcutHistory = []
+  setHistory(options.history)
+
   api = {}
 
   api.beginning = ->
@@ -45,38 +64,6 @@ Recorder = (options={}) ->
   api.goToMarker = -> api.goToLocation(_marker)
 
   api.shortcutHistory = -> _shortcutHistory.slice()
-
-  if !options.history
-    history = {}
-    history[_location.branch] = 
-      name: _location.branch
-      ops: []
-      offset: 0
-      preOffset: 0
-      ancestors: []
-      children: []
-      annotations: []
-  else
-    history = options.history #cleanHistory(options.history)
-  
-  api.initialize = (options) ->
-    _editor = api.editor = options.editor
-    _triggerRender = options.triggerRender
-    _editor.on 'change', editorEvent("change")
-    if _triggerRender
-      _editor.on 'change', -> _triggerRender()
-    _editor.on 'cursorActivity', editorEvent("cursor")
-    _editor.on 'keyHandled', editorEvent("key")
-    _editor.on 'beforeChange', (cm, change) -> 
-      if !api.locationsEqual(_location, _marker) and _playing == false and _locked == false
-        change.cancel()
-
-  api.locationsEqual = (b1, b2) ->
-    b1.branch == b2.branch and Math.round(b1.offset) == Math.round(b2.offset)
-  api.branch = (name=null) ->
-    if !name
-      return history[_location.branch]
-    history[name]
 
   editorEvent = (name) ->
     =>
@@ -115,6 +102,41 @@ Recorder = (options={}) ->
         _location.offset = _location.offset+1
       _marker = _(_location).clone()
 
+
+  beforeChange = (cm, change) -> 
+    if !api.locationsEqual(_location, _marker) and _playing == false and _locked == false
+      change.cancel()  
+
+  _listeners = []  
+  api.initialize = (options) ->
+    _editor = _editor || options.editor
+    
+    _triggerRender = options.triggerRender || _triggerRender
+    _listeners = [["change", editorEvent("change")], 
+                  ["cursorActivity", editorEvent("cursor")],
+                  ["keyHandled", editorEvent("key")],
+                  ["beforeChange", beforeChange]]
+
+    if _triggerRender
+      _listeners.push(["change", (-> _triggerRender())])              
+    for listener in _listeners
+      _editor.on listener[0], listener[1]
+    if options.history  
+      setHistory(options.history)  
+
+  api.dispose = ->
+    for listener in _listeners
+      _editor.off listener[0], listener[1]  
+
+  api.locationsEqual = (b1, b2) ->
+    b1.branch == b2.branch and Math.round(b1.offset) == Math.round(b2.offset)
+  api.branch = (name=null) ->
+    if !name
+      return history[_location.branch]
+    history[name]
+
+  
+
   api.playing = ->    _playing
   api.play = ->       play()
   api.stop = ->       _playing = false
@@ -141,7 +163,7 @@ Recorder = (options={}) ->
     , 0
     stepForward = =>
       
-      transition = Math.min(4, Math.max(options.transition, (totalOperations / 30)))
+      transition = options.transition # Math.min(4, Math.max(options.transition, (totalOperations / 30)))
 
 
       # Find the target operation based on transition time
@@ -233,6 +255,7 @@ Recorder = (options={}) ->
     _marker = 
       branch: _location.branch
       offset: Math.round(_location.offset)
+    
     _editor.focus()
     _triggerRender()
     false
@@ -250,18 +273,20 @@ Recorder = (options={}) ->
       _editor.operation ->
         for changes in operations
           applyChanges(_editor, changes)
-      _locked = false
+      _locked = false  
     _triggerRender()
     _location = destination
 
   api.goToLocation = (destination) ->
     return if _playing == true # or !api.locationsEqual(_marker, destination)
     navigate(destination)
-    
+  api.editor = ->
+    _editor  
   api.branches = ->
     bars = []
     annotations = []
     width = 0
+    
     currentBranch = history[_location.branch]
     ancestors = currentBranch.ancestors.concat(_location.branch)
 
@@ -350,7 +375,7 @@ applyChanges = (editor, changes) ->
       # when "key-combo"
         # api.shortcutHistory = api.shortcutHistory.concat [change.name]
       when "cursor"
-        editor.focus()
+        # editor.focus()
         editor.setCursor change.cursor
       when "selections"
         editor.setSelections change.selections

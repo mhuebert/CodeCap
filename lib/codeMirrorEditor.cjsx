@@ -15,36 +15,43 @@ formatTime = (time) ->
   d = new Date(parseInt(time))
   "#{d.getHours()}:#{zeroFill(d.getMinutes(), 2)}:#{zeroFill(d.getSeconds(), 2)}, #{monthNames[d.getMonth()]} #{d.getDate()}"
 
+blankState = ->
+  showBranches: true
+  recorder: Recorder()
+  contextMenu: {visible: false}
+  annotation: {}
 
 module.exports = React.createClass
 
   getInitialState: ->
-    showBranches: true
-    recorder: Recorder()
-    contextMenu: {visible: false}
-    annotation: {}
+    blankState()
 
   reset: ->
     if confirm("Are you sure? You will lose all your data...")
-      @setState(@getInitialState())
       @reInit()  
 
-  reInit: ->
-    self = this
-
+  triggerRender: (callback=->) ->
+    this.setState {lastRendered: Date.now()}, callback
+      
+  reInit: (history) ->
+    @state.recorder.dispose()
     @state.editor.setValue("")
-    @state.recorder.initialize
+    @setState blankState()
+    r = Recorder(history: history)
+    r.initialize
       editor: @state.editor
-      triggerRender: (callback=->) ->
-        self.setState {lastRendered: Date.now()}, callback 
+      triggerRender: @triggerRender
+    @setState {recorder: r}
+    setTimeout =>
+      @forceUpdate()
+    , 100  
+
 
   componentDidMount: ->
-    self = this
     @setState editor: CodeMirror.fromTextArea(@refs.editor.getDOMNode(), editorSettings)
     @state.recorder.initialize
       editor: @state.editor
-      triggerRender: (callback=->) -> 
-        self.setState {lastRendered: Date.now()}, callback
+      triggerRender: @triggerRender
 
   handleMouseMove: (e) ->
     {width, left} = this.refs.timeline.getDOMNode().getBoundingClientRect()
@@ -110,18 +117,14 @@ module.exports = React.createClass
     e.target.href = uriContent
   loadJSON: (e) ->
     reader = new FileReader()
-    
     reader.onloadend = (what) =>
-      history = JSON.parse(reader.result)
-      @setState {recorder: Recorder(history: history)}
-      @reInit()
-    
+      @reInit(JSON.parse(reader.result))
     reader.readAsText(e.target.files[0])
+
   setGlobalHover: (name) ->
     (e) =>
       @setState hovering: name
   render: ->
-    
     {bars, totalWidth, annotations} = @state.recorder.branches()
     bars = [] if !@state.showBranches
     marker = @state.recorder.marker()

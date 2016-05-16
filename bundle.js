@@ -65,7 +65,7 @@
 /******/ 	}
 /******/ 	
 /******/ 	var hotApplyOnUpdate = true;
-/******/ 	var hotCurrentHash = "f294e6488963f7458aa3"; // eslint-disable-line no-unused-vars
+/******/ 	var hotCurrentHash = "2f8bdee8e728996633ac"; // eslint-disable-line no-unused-vars
 /******/ 	var hotCurrentModuleData = {};
 /******/ 	var hotCurrentParents = []; // eslint-disable-line no-unused-vars
 /******/ 	
@@ -24366,7 +24366,7 @@
 	  var getHotUpdateAPI = __webpack_require__(153);
 	  return getHotUpdateAPI(React, "codeMirrorEditor.cjsx", module.id);
 	})();
-	var Annotation, CodeMirror, React, Recorder, cx, editorSettings, formatTime, monthNames, zeroFill, _;
+	var Annotation, CodeMirror, React, Recorder, blankState, cx, editorSettings, formatTime, monthNames, zeroFill, _;
 
 	React = __webpack_require__(163);
 
@@ -24398,55 +24398,62 @@
 	  return "" + (d.getHours()) + ":" + (zeroFill(d.getMinutes(), 2)) + ":" + (zeroFill(d.getSeconds(), 2)) + ", " + monthNames[d.getMonth()] + " " + (d.getDate());
 	};
 
+	blankState = function() {
+	  return {
+	    showBranches: true,
+	    recorder: Recorder(),
+	    contextMenu: {
+	      visible: false
+	    },
+	    annotation: {}
+	  };
+	};
+
 	module.exports = __hotUpdateAPI.createClass({
 	  getInitialState: function() {
-	    return {
-	      showBranches: true,
-	      recorder: Recorder(),
-	      contextMenu: {
-	        visible: false
-	      },
-	      annotation: {}
-	    };
+	    return blankState();
 	  },
 	  reset: function() {
 	    if (confirm("Are you sure? You will lose all your data...")) {
-	      this.setState(this.getInitialState());
 	      return this.reInit();
 	    }
 	  },
-	  reInit: function() {
-	    var self;
-	    self = this;
+	  triggerRender: function(callback) {
+	    if (callback == null) {
+	      callback = function() {};
+	    }
+	    return this.setState({
+	      lastRendered: Date.now()
+	    }, callback);
+	  },
+	  reInit: function(history) {
+	    var r;
+	    this.state.recorder.dispose();
 	    this.state.editor.setValue("");
-	    return this.state.recorder.initialize({
-	      editor: this.state.editor,
-	      triggerRender: function(callback) {
-	        if (callback == null) {
-	          callback = function() {};
-	        }
-	        return self.setState({
-	          lastRendered: Date.now()
-	        }, callback);
-	      }
+	    this.setState(blankState());
+	    r = Recorder({
+	      history: history
 	    });
+	    r.initialize({
+	      editor: this.state.editor,
+	      triggerRender: this.triggerRender
+	    });
+	    this.setState({
+	      recorder: r
+	    });
+	    return setTimeout((function(_this) {
+	      return function() {
+	        return _this.forceUpdate();
+	      };
+	    })(this), 100);
 	  },
 	  componentDidMount: function() {
-	    var self;
-	    self = this;
 	    this.setState({
 	      editor: CodeMirror.fromTextArea(this.refs.editor.getDOMNode(), editorSettings)
 	    });
 	    return this.state.recorder.initialize({
 	      editor: this.state.editor,
-	      triggerRender: function(callback) {
-	        if (callback == null) {
-	          callback = function() {};
-	        }
-	        return self.setState({
-	          lastRendered: Date.now()
-	        }, callback);
-	      }
+	      triggerRender: this.triggerRender
 	    });
 	  },
 	  handleMouseMove: function(e) {
@@ -24553,14 +24560,7 @@
 	    reader = new FileReader();
 	    reader.onloadend = (function(_this) {
 	      return function(what) {
-	        var history;
-	        history = JSON.parse(reader.result);
-	        _this.setState({
-	          recorder: Recorder({
-	            history: history
-	          })
-	        });
-	        return _this.reInit();
+	        return _this.reInit(JSON.parse(reader.result));
 	      };
 	    })(this);
 	    return reader.readAsText(e.target.files[0]);
@@ -37027,7 +37027,7 @@
 /* 185 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var CodeMirror, IntervalTimer, Recorder, applyChanges, changeHandlers, cleanHistory, earliestBranch, indexByChildren, invertChanges, invertOperation, opsBetweenLocations, opsFromList, pathBetweenLocations, _,
+	var CodeMirror, IntervalTimer, Recorder, applyChanges, blankHistory, changeHandlers, cleanHistory, earliestBranch, indexByChildren, invertChanges, invertOperation, opsBetweenLocations, opsFromList, pathBetweenLocations, _,
 	  __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
 	CodeMirror = __webpack_require__(179);
@@ -37035,7 +37035,6 @@
 	_ = __webpack_require__(184);
 
 	earliestBranch = function(history) {
-	  console.log(history, parseInt(_(history).chain().keys().sort().reverse().value()));
 	  return parseInt(_(history).chain().keys().sort().value());
 	};
 
@@ -37052,23 +37051,44 @@
 	  return history;
 	};
 
+	blankHistory = function() {
+	  var branch, h;
+	  h = {};
+	  branch = Date.now().toString();
+	  h[branch] = {
+	    name: branch,
+	    ops: [],
+	    offset: 0,
+	    preOffset: 0,
+	    ancestors: [],
+	    children: [],
+	    annotations: []
+	  };
+	  return h;
+	};
+
 	Recorder = function(options) {
-	  var api, editorEvent, history, navigate, play, playTo, _editor, _location, _locked, _marker, _playing, _root, _shortcutHistory, _speed, _timer, _triggerRender;
+	  var api, beforeChange, editorEvent, history, navigate, play, playTo, setHistory, _editor, _listeners, _location, _locked, _marker, _playing, _root, _shortcutHistory, _speed, _timer, _triggerRender;
 	  if (options == null) {
 	    options = {};
 	  }
 	  _locked = false;
-	  _editor = {};
+	  _editor = options.editor;
 	  _timer = IntervalTimer();
 	  _speed = 2.5;
 	  _playing = false;
-	  _root = options.history ? earliestBranch(options.history) : Date.now().toString();
-	  _triggerRender = function() {};
-	  _location = _marker = {
-	    offset: 0,
-	    branch: _root
+	  _triggerRender = options.triggerRender || function() {};
+	  _location = _root = history = _marker = _shortcutHistory = null;
+	  setHistory = function(h) {
+	    history = h || blankHistory();
+	    _root = earliestBranch(history);
+	    _location = _marker = {
+	      offset: 0,
+	      branch: _root
+	    };
+	    return _shortcutHistory = [];
 	  };
-	  _shortcutHistory = [];
+	  setHistory(options.history);
 	  api = {};
 	  api.beginning = function() {
 	    return {
@@ -37109,49 +37129,6 @@
 	  };
 	  api.shortcutHistory = function() {
 	    return _shortcutHistory.slice();
-	  };
-	  if (!options.history) {
-	    history = {};
-	    history[_location.branch] = {
-	      name: _location.branch,
-	      ops: [],
-	      offset: 0,
-	      preOffset: 0,
-	      ancestors: [],
-	      children: [],
-	      annotations: []
-	    };
-	  } else {
-	    history = options.history;
-	  }
-	  api.initialize = function(options) {
-	    _editor = api.editor = options.editor;
-	    _triggerRender = options.triggerRender;
-	    _editor.on('change', editorEvent("change"));
-	    if (_triggerRender) {
-	      _editor.on('change', function() {
-	        return _triggerRender();
-	      });
-	    }
-	    _editor.on('cursorActivity', editorEvent("cursor"));
-	    _editor.on('keyHandled', editorEvent("key"));
-	    return _editor.on('beforeChange', function(cm, change) {
-	      if (!api.locationsEqual(_location, _marker) && _playing === false && _locked === false) {
-	        return change.cancel();
-	      }
-	    });
-	  };
-	  api.locationsEqual = function(b1, b2) {
-	    return b1.branch === b2.branch && Math.round(b1.offset) === Math.round(b2.offset);
-	  };
-	  api.branch = function(name) {
-	    if (name == null) {
-	      name = null;
-	    }
-	    if (!name) {
-	      return history[_location.branch];
-	    }
-	    return history[name];
 	  };
 	  editorEvent = function(name) {
 	    return (function(_this) {
@@ -37195,6 +37172,53 @@
 	        return _marker = _(_location).clone();
 	      };
 	    })(this);
+	  };
+	  beforeChange = function(cm, change) {
+	    if (!api.locationsEqual(_location, _marker) && _playing === false && _locked === false) {
+	      return change.cancel();
+	    }
+	  };
+	  _listeners = [];
+	  api.initialize = function(options) {
+	    var listener, _i, _len;
+	    _editor = _editor || options.editor;
+	    _triggerRender = options.triggerRender || _triggerRender;
+	    _listeners = [["change", editorEvent("change")], ["cursorActivity", editorEvent("cursor")], ["keyHandled", editorEvent("key")], ["beforeChange", beforeChange]];
+	    if (_triggerRender) {
+	      _listeners.push([
+	        "change", (function() {
+	          return _triggerRender();
+	        })
+	      ]);
+	    }
+	    for (_i = 0, _len = _listeners.length; _i < _len; _i++) {
+	      listener = _listeners[_i];
+	      _editor.on(listener[0], listener[1]);
+	    }
+	    if (options.history) {
+	      return setHistory(options.history);
+	    }
+	  };
+	  api.dispose = function() {
+	    var listener, _i, _len, _results;
+	    _results = [];
+	    for (_i = 0, _len = _listeners.length; _i < _len; _i++) {
+	      listener = _listeners[_i];
+	      _results.push(_editor.off(listener[0], listener[1]));
+	    }
+	    return _results;
+	  };
+	  api.locationsEqual = function(b1, b2) {
+	    return b1.branch === b2.branch && Math.round(b1.offset) === Math.round(b2.offset);
+	  };
+	  api.branch = function(name) {
+	    if (name == null) {
+	      name = null;
+	    }
+	    if (!name) {
+	      return history[_location.branch];
+	    }
+	    return history[name];
 	  };
 	  api.playing = function() {
 	    return _playing;
@@ -37242,7 +37266,7 @@
 	    stepForward = (function(_this) {
 	      return function() {
 	        var delta, direction, nextSegment, operationCount, percent, segI, segment, segmentOperationCount, target, targetOperation, transition, _i, _len;
-	        transition = Math.min(4, Math.max(options.transition, totalOperations / 30));
+	        transition = options.transition;
 	        delta = Date.now() - startTime;
 	        percent = Math.min(delta / (transition * 1000), 1);
 	        targetOperation = Math.round(percent * totalOperations);
@@ -37371,6 +37395,9 @@
 	    }
 	    return navigate(destination);
 	  };
+	  api.editor = function() {
+	    return _editor;
+	  };
 	  api.branches = function() {
 	    var active, activeWidth, ancestors, annotation, annotations, bar, bars, branch, currentBranch, indicators, name, offset, totalWidth, width, _i, _len, _ref;
 	    bars = [];
@@ -37485,7 +37512,6 @@
 	        _results.push(editor.replaceRange(change.text.join("\n"), change.from, change.to));
 	        break;
 	      case "cursor":
-	        editor.focus();
 	        _results.push(editor.setCursor(change.cursor));
 	        break;
 	      case "selections":
